@@ -1,0 +1,21 @@
+# Token state and captured debug material never belong in a repository.
+nlzietd/state/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.log
+
+# Local TLS material: certificates expire and keys must never be committed.
+*.pem
+*.crt
+*.key
+*.pfx
+
+# Throwaway probes: QR-decode harnesses, encoded frames, local experiments.
+qr_check/
+stream_check/
+probe_*.py
+explore.py
+
