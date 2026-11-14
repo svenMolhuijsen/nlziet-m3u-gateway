@@ -299,6 +299,21 @@ apply to it, and its certificate bundle would reject a self-signed certificate.
 The playlist is built from the request, so an http request gets http URLs
 throughout — no mixed content, no certificate to install.
 
+## Tests
+
+The suite is plain standard-library `unittest`: no pytest, no network, and no
+ffmpeg (the encoder is replaced by a fake runner). From the repository root:
+
+```
+python -m unittest discover -s nlzietd/tests -t .
+```
+
+109 tests cover the layer boundaries, token renewal, manifest rewriting, the
+router, the pairing state machine, the QR/PNG encoders and the HLS playlist.
+The QR digest pinned in `test_qr.py` was decoded with an independent
+implementation (jsQR) before it was pinned; that decoder is a local
+verification harness, not a dependency of the daemon.
+
 ## Layers
 
 ```
