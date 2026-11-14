@@ -1,0 +1,26 @@
+# One command to run the gateway on a LAN machine:
+#   docker compose up --build -d
+#
+# http://localhost:8099/playlist.m3u is what an M3U player needs. Browsers need
+# https for EME; mount a trusted certificate into /state/tls and uncomment the
+# two TLS variables below.
+services:
+  nlzietd:
+    build: .
+    image: nlziet-m3u-gateway:local
+    container_name: nlziet-m3u-gateway
+    ports:
+      - "8099:8099"
+      - "8443:8443"
+    environment:
+      NLZIETD_STATE: /state
+      # NLZIETD_TLS_CERT: /state/tls/live.crt
+      # NLZIETD_TLS_KEY: /state/tls/live.key
+      # NLZIET_EMAIL: you@example.com
+      # NLZIET_PASSWORD: ...
+    volumes:
+      - state:/state
+    restart: unless-stopped
+
+volumes:
+  state:
