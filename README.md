@@ -26,7 +26,23 @@ Not affiliated with NLZiet. It plays the subscription you already pay for, on
 the machines in your own home; it is not a way to share streams with anyone
 else.
 
-## Run
+**Start here:** [QUICKSTART.md](QUICKSTART.md) — four independent ways to run
+it: Docker or Python, each with or without Tailscale. Pick the one that fits
+your machine; the rest of this file is reference.
+
+## Quick start (Docker)
+
+```
+docker compose up --build -d
+```
+
+Open `http://localhost:8099/playlist.m3u` in Kodi or another M3U player, or
+`http://localhost:8099/` in a browser on the same machine. A fresh daemon has
+no session, so that playlist is a single channel with a QR code to pair with —
+scan it, log in, and the channel list appears. See
+[QUICKSTART.md](QUICKSTART.md) for the Tailscale variant and the Python paths.
+
+## Run (Python)
 
 Pair this machine once, so the daemon has a session that renews itself:
 
