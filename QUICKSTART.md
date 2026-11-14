@@ -29,6 +29,24 @@ with plain http. So:
   or your own certificate).
 - Tailscale Serve and the daemon's own TLS listener both provide that https.
 
+### Three ways to get https — and where the TLS variables fit
+
+`NLZIETD_TLS_CERT` and `NLZIETD_TLS_KEY` are just **paths to two PEM files**
+(a certificate chain and its private key). Setting both enables the daemon's
+own https listener on port 8443. Without them it is plain http only. They are
+optional, not Tailscale-specific, and nothing else in the project reads them.
+
+| how | who terminates TLS | TLS variables? | renewal |
+| --- | --- | --- | --- |
+| **Tailscale Serve** (sections 2 and 4A) | Tailscale, with a certificate for the `*.ts.net` name | **no** | automatic |
+| your own certificate (section 1) | nlzietd on 8443 | **yes** | up to you |
+| `tailscale cert` + own listener (section 4B) | nlzietd on 8443 | **yes** | re-run every 90 days |
+
+So `tailscale cert` *produces* those two files, and the variables *consume*
+them. With Tailscale Serve the daemon stays on plain http 8099 and Tailscale
+handles TLS — no files, no renewal, no variables. Either way the http port stays
+available for Kodi.
+
 Keep it private: there is no authentication on the HTTP server. Every path
 below stays on a LAN or a tailnet. **Funnel is never used.**
 

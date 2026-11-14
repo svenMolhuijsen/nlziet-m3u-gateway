@@ -50,7 +50,9 @@ Pair this machine once, so the daemon has a session that renews itself:
 python -m nlzietd login
 ```
 
-Then start it (add `NLZIETD_TLS_CERT`/`NLZIETD_TLS_KEY` for the https listener):
+Then start it. The https listener is optional: add
+`NLZIETD_TLS_CERT`/`NLZIETD_TLS_KEY` only when browsers on *other* machines
+need it — see [QUICKSTART.md](QUICKSTART.md) for the three ways to get https:
 
 ```
 python -m nlzietd
