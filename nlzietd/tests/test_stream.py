@@ -147,12 +147,16 @@ class PlaylistTests(unittest.TestCase):
 
 class FailureTests(unittest.TestCase):
     def test_no_ffmpeg_means_no_stream_but_a_honest_answer(self):
+        # Keep the patch active for the whole test: available() deliberately
+        # looks for an encoder again (one installed after start-up should be
+        # picked up), so a machine with ffmpeg on PATH would otherwise pass
+        # this test for the wrong reason.
         with mock.patch("nlzietd.web.stream.shutil.which", return_value=None):
             svc = PairingStream(ffmpeg=None, runner=Recorder())
-        self.assertFalse(svc.available())
-        with self.assertRaises(StreamUnavailable) as caught:
-            svc.playlist(CODE, URL, PAGE)
-        self.assertIn("ffmpeg", str(caught.exception))
+            self.assertFalse(svc.available())
+            with self.assertRaises(StreamUnavailable) as caught:
+                svc.playlist(CODE, URL, PAGE)
+            self.assertIn("ffmpeg", str(caught.exception))
 
     def test_an_explicit_path_wins_over_path_lookup(self):
         with mock.patch("nlzietd.web.stream.shutil.which", return_value="other") as which:

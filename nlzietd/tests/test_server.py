@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from nlzietd.config import Settings
@@ -170,8 +171,12 @@ class TlsSettingsTests(unittest.TestCase):
         }
         with mock.patch.dict(os.environ, env, clear=True):
             settings = Settings.from_env()
-        self.assertEqual(str(settings.tls_cert), "C:\\state\\tls\\live.crt")
-        self.assertEqual(str(settings.tls_key), "C:\\state\\tls\\live.key")
+        # Path renders separators for the host OS, so compare against Path
+        # rather than a hardcoded Windows string: the same settings must be
+        # valid when the gateway runs as a service on Linux.
+        self.assertEqual(settings.tls_cert, Path(env["NLZIETD_TLS_CERT"]))
+        self.assertEqual(settings.tls_key, Path(env["NLZIETD_TLS_KEY"]))
+        self.assertIsInstance(settings.tls_cert, Path)
         self.assertEqual(settings.tls_port, 9443)
 
 
