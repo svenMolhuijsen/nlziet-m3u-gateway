@@ -102,16 +102,22 @@ class SessionTests(unittest.TestCase):
             bare.token()
 
     def test_status_says_expired_when_the_token_has_died(self):
-        # The 8-hour cliff: a dead token on disk is not a session, and this is
-        # the field a monitor (or a person) reads to know it.
+        # A dead token on disk is not a session, even though a refresh token
+        # is still there - this is the field a monitor (or a person) reads.
         self.store.tokens = Tokens("old", "id", "refresh", int(self.clock()) - 10)
         status = self.session.status()
         self.assertFalse(status["authenticated"])
         self.assertLess(status["expires_in"], 0)
 
-    def test_status_says_whether_it_can_recover_by_itself(self):
-        self.store.tokens = Tokens("old", "id", None, int(self.clock()) - 10)
+    def test_status_says_whether_it_can_renew_by_itself(self):
+        # Only a refresh token buys silent renewal; without one a human has to
+        # pair again, so the field must say False rather than "a provider
+        # exists".
+        self.store.tokens = Tokens("old", "id", "refresh", int(self.clock()) - 10)
         self.assertTrue(self.session.status()["can_relogin"])
+
+        self.store.tokens = Tokens("old", "id", None, int(self.clock()) - 10)
+        self.assertFalse(self.session.status()["can_relogin"])
 
         bare = SessionService(store=FakeStore(), provider=None, skew=60,
                               clock=self.clock)
