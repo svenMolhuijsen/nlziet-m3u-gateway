@@ -428,12 +428,17 @@ def pairing_playlist(base: str, view: dict, stream: bool = False) -> str:
     return "\n".join(lines) + "\n"
 
 
-def playlist(base: str, channels: dict[str, Channel]) -> str:
-    """An M3U for Kodi's inputstream.adaptive.
+def playlist(base: str, channels: dict[str, Channel], android: bool = False) -> str:
+    """An M3U for Kodi's `inputstream.adaptive` — and for Android apps that
+    read the same `#KODIPROP` lines.
 
-    `license_key` syntax is `url|headers|request data|response`. Empty headers
-    and `R{SSM}|R` mean: POST the raw challenge as the body and take the raw
-    response back - which is exactly what our licence route speaks.
+    `license_key` has two shapes. Kodi wants the four-field form
+    `url|headers|request data|response`; empty headers and `R{SSM}|R` mean POST
+    the raw challenge as the body and take the raw response back — exactly what
+    our licence route speaks. Native Android TV players (OTT Navigator, Prysm)
+    read those same `#KODIPROP` lines but want a *plain* licence URL: their
+    ExoPlayer/MediaDrm already sends the raw challenge by itself. `android=True`
+    emits that simpler form, so `?android=1` on the playlist URL serves them.
     """
     lines = ["#EXTM3U"]
     for channel in channels.values():
@@ -444,9 +449,9 @@ def playlist(base: str, channels: dict[str, Channel]) -> str:
         lines.append("#KODIPROP:inputstream=inputstream.adaptive")
         lines.append("#KODIPROP:inputstream.adaptive.manifest_type=mpd")
         lines.append("#KODIPROP:inputstream.adaptive.license_type=com.widevine.alpha")
-        lines.append(
-            f"#KODIPROP:inputstream.adaptive.license_key="
-            f"{base}/licence/{channel.id}||R{{SSM}}|R"
-        )
+        licence = f"{base}/licence/{channel.id}"
+        if not android:
+            licence += "||R{SSM}|R"
+        lines.append(f"#KODIPROP:inputstream.adaptive.license_key={licence}")
         lines.append(f"{base}/manifest/{channel.id}.mpd")
     return "\n".join(lines) + "\n"

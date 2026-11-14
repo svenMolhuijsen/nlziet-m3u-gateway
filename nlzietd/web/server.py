@@ -285,7 +285,15 @@ def build_router(
                     base, view, stream=bool(stream and stream.available())
                 ).encode("utf-8"),
             )
-        text = playlist(base, catalogue.channels())
+        # `?android=1` (or `?flavor=android`) drops Kodi's four-field
+        # `license_key` wrapper: Android TV players read the same #KODIPROP
+        # lines but want a plain licence URL for their MediaDrm challenge.
+        query = request.query
+        android = (
+            query.get("android", [""])[0] not in ("", "0")
+            or query.get("flavor", [""])[0] == "android"
+        )
+        text = playlist(base, catalogue.channels(), android=android)
         return Reply(
             200,
             {"content-type": "audio/x-mpegurl; charset=utf-8"},
