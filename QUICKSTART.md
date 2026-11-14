@@ -321,23 +321,39 @@ journalctl --user -u nlzietd -f
 ### A stable name: Tailscale Services
 
 Tailscale Serve publishes under the *node's* MagicDNS name, which changes if
-the gateway moves. A **Tailscale Service** (`svc:nlziet`) keeps one name and
-its own virtual IP across hosts. It needs admin-console work and a **tagged**
-host — this is the part that cannot be done from the CLI alone:
+the gateway moves. A **Tailscale Service** keeps one name and its own virtual
+IP across hosts. This deployment uses `svc:nlziet-gateway`, so the playlist is
+always `https://nlziet-gateway.<tailnet>.ts.net/playlist.m3u` — moving the
+gateway to another machine does not change a single client's URL.
 
-1. Admin console → **Services** → define `svc:nlziet` with endpoint `tcp:443`.
-2. Service hosts must be tagged nodes (`service hosts must be tagged nodes`).
-   A desktop authenticated with a user account is not: re-authenticate with a
-   tagged auth key, or run a dedicated container node with one.
-3. On that host: `tailscale serve --service=svc:nlziet --https=443 8099`, then
-   approve the pending host in the console (or set `autoApprovers`).
-4. ACL grant so clients can reach it:
-   `{"src": ["autogroup:member"], "dst": ["svc:nlziet"], "ip": ["443"]}`.
+It needs admin-console work and a **tagged** host (`service hosts must be
+tagged nodes`); a desktop authenticated with a user account is not:
 
-Then every tailnet device uses `https://nlziet.<tailnet>.ts.net/playlist.m3u`.
+1. Define the Service with endpoint `tcp:443` — admin console → **Services**,
+   or `PUT /api/v2/tailnet/-/vip-services/svc%3Anlziet-gateway` with
+   `{"name":"svc:nlziet-gateway","ports":["tcp:443"]}`. On an update the
+   existing `addrs` must be sent too.
+2. Get a **tagged** auth key. Keys created without a tag cannot tag a node:
+   `POST /api/v2/tailnet/-/keys` with
+   `{"capabilities":{"devices":{"create":{"reusable":true,"preauthorized":true,"tags":["tag:nlziet"]}}},"expirySeconds":3600}`.
+   Re-authenticate the host with it:
+   `sudo tailscale up --ssh --operator=<user> --force-reauth --auth-key=<key>`.
+   Do this over local/LAN ssh, **not** over Tailscale SSH or RDP — re-auth can
+   briefly drop the tunnel. Revoke the key once the node shows its tag.
+3. Add `tagOwners` for the tag, an `autoApprovers.services` entry for the
+   Service, an ACL grant
+   `{"src": ["autogroup:member"], "dst": ["svc:nlziet-gateway"], "ip": ["443"]}`,
+   and an `ssh` rule for the tag so Tailscale SSH keeps working. Post the
+   policy back with the `If-Match` ETag from `GET /acl`.
+4. Advertise: `tailscale serve --service=svc:nlziet-gateway --https=443 8099`.
+   With the auto-approver the host becomes `approved:auto` / `configured: ready`.
+   Keep the node-level `tailscale serve --bg 8099` too if you want the old
+   per-node URL as a fallback.
+
 A Service VIP is reachable **only from tailnet nodes**, so devices without
-Tailscale keep using the LAN address above — that is the "open a port" side of
-the setup, not Funnel.
+Tailscale — a living-room TV — keep using the LAN address above. That is the
+"open a port" side of the setup (the host firewall must allow inbound 8099
+from the LAN), not Funnel: nothing is public.
 
 ---
 
