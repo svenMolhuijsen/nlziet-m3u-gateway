@@ -351,7 +351,9 @@ docker compose up --build -d
 docker compose logs -f
 ```
 
-* `http://localhost:8099/playlist.m3u` — Kodi and M3U players.
+* `http://localhost:8099/playlist.m3u` — Kodi and M3U players. If those host
+  ports are already taken, set `NLZIETD_HTTP_PORT` / `NLZIETD_HTTPS_PORT`
+  before `docker compose up` (see the comments in `docker-compose.yml`).
 * Browsers still need https for EME. Put a trusted certificate in the state
   volume (`/state/tls/`), uncomment `NLZIETD_TLS_CERT`/`NLZIETD_TLS_KEY` in
   `docker-compose.yml`, and browse to the name on the certificate on port 8443.

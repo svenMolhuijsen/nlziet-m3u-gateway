@@ -4,14 +4,18 @@
 # http://localhost:8099/playlist.m3u is what an M3U player needs. Browsers need
 # https for EME; mount a trusted certificate into /state/tls and uncomment the
 # two TLS variables below.
+#
+# If 8099/8443 are already taken on the host (for example because the daemon
+# also runs natively), set the host ports without editing this file:
+#   NLZIETD_HTTP_PORT=18099 NLZIETD_HTTPS_PORT=18443 docker compose up -d
 services:
   nlzietd:
     build: .
     image: nlziet-m3u-gateway:local
     container_name: nlziet-m3u-gateway
     ports:
-      - "8099:8099"
-      - "8443:8443"
+      - "${NLZIETD_HTTP_PORT:-8099}:8099"
+      - "${NLZIETD_HTTPS_PORT:-8443}:8443"
     environment:
       NLZIETD_STATE: /state
       # NLZIETD_TLS_CERT: /state/tls/live.crt
