@@ -13,6 +13,13 @@ venv/
 *.key
 *.pfx
 
+# Deployment secrets and local node state: an auth key or a serve config with
+# the real tailnet name must never be committed.
+.env
+*.env
+ts-state/
+tailscale/serve.json
+
 # Throwaway probes: QR-decode harnesses, encoded frames, local experiments.
 qr_check/
 stream_check/

@@ -1,0 +1,57 @@
+# Run nlzietd as its own node on a tailnet.
+#
+# Unlike docker-compose.yml, this stack publishes NO ports on the host: the
+# gateway lives in the tailscale container's network namespace and is reachable
+# only over Tailscale. That matters because the daemon holds your NLZiet
+# session.
+#
+# Prerequisites in the Tailscale admin console:
+#   - MagicDNS and HTTPS certificates enabled (DNS tab)
+#   - an auth key (Settings -> Keys); an ephemeral, tagged key is fine
+#
+#   TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d
+#   docker compose -f compose.tailnet.yml exec tailscale tailscale serve --bg 8099
+#
+# The second command prints the https URL. Serve terminates TLS with a
+# certificate Tailscale provisions and renews for the node's MagicDNS name,
+# so browsers get a secure context (EME/Widevine) without any cert files in
+# the daemon. Serve preserves the original Host header and sets
+# x-forwarded-proto: https, which is what nlzietd uses to build its URLs.
+services:
+  tailscale:
+    # Pin the version: a daemon holding a session should not silently upgrade
+    # its network stack overnight.
+    image: tailscale/tailscale:v1.104.7
+    hostname: ${TS_HOSTNAME:-nlziet}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY to a Tailscale auth key}
+      TS_HOSTNAME: ${TS_HOSTNAME:-nlziet}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_AUTH_ONCE: "true"
+      # Userspace networking needs no /dev/net/tun, which Docker Desktop on
+      # Windows does not expose. Inbound tailnet connections are forwarded to
+      # the same port on localhost in this shared namespace.
+      TS_USERSPACE: "true"
+    volumes:
+      - ts-state:/var/lib/tailscale
+    restart: unless-stopped
+
+  nlzietd:
+    build: .
+    image: nlziet-m3u-gateway:local
+    # One network namespace for both containers. No ports: nothing listens on
+    # the LAN. NLZIETD_HOST binds the plain http listener to loopback, where
+    # tailscaled (and Tailscale Serve) can reach it.
+    network_mode: service:tailscale
+    depends_on:
+      - tailscale
+    environment:
+      NLZIETD_HOST: 127.0.0.1
+      NLZIETD_STATE: /state
+    volumes:
+      - state:/state
+    restart: unless-stopped
+
+volumes:
+  state:
+  ts-state:
