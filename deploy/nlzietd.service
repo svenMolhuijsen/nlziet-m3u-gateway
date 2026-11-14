@@ -1,0 +1,39 @@
+# systemd user unit for nlzietd on a Linux host (tested on Bazzite / Fedora
+# atomic). The daemon needs only Python 3.12+ and, for the pairing video
+# channel, ffmpeg; both are standard on most desktops.
+#
+# Install (assuming the repo is cloned to ~/nlzietd):
+#   mkdir -p ~/.config/systemd/user ~/.local/state/nlzietd
+#   cp deploy/nlzietd.service ~/.config/systemd/user/nlzietd.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now nlzietd.service
+#   sudo loginctl enable-linger "$USER"        # start at boot without a login
+#
+# Tailscale Serve gives browsers https without certificate files:
+#   tailscale serve --bg 8099
+# Then use https://<this-node>.<tailnet>.ts.net/playlist.m3u on the tailnet and
+# http://<lan-ip>:8099/playlist.m3u for devices that are not (such as a TV).
+#
+# A *Tailscale Service* (stable name decoupled from the node) needs a tagged
+# host: re-authenticate with a tagged auth key or use a dedicated container
+# node, then `tailscale serve --service=svc:<name> --https=443 8099`. See
+# QUICKSTART.md.
+[Unit]
+Description=nlzietd - private NLZiet M3U gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/nlzietd
+Environment=NLZIETD_HOST=0.0.0.0
+Environment=NLZIETD_STATE=%h/.local/state/nlzietd
+Environment=NLZIETD_FFMPEG=/usr/bin/ffmpeg
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -m nlzietd
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
