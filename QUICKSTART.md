@@ -68,6 +68,27 @@ The session is saved in `nlzietd/state/tokens.json` (Python) or the `state`
 volume (Docker). It renews itself with a refresh token; back that file/volume
 up. **Do not share it** — it is a bearer token for your account.
 
+## Which player works without a browser?
+
+**Kodi with `inputstream.adaptive`** is the one to bet on. It has a Widevine
+CDM, and it is also the only player that reads the `#KODIPROP` lines in our M3U —
+those lines are what tell a player where to fetch the licence. Generic IPTV
+apps ignore them and therefore never even get that far.
+
+| player | real channels (Widevine DASH) | pairing channel (plain HLS) |
+| --- | --- | --- |
+| **Kodi + `inputstream.adaptive`** | **yes** | yes |
+| Chrome/Edge (browser) | yes, on https or localhost | yes |
+| VLC, mpv, ffplay | no — no CDM | **yes** |
+| Tivimate, Perfect Player, OTT Navigator, IPTV Smarters | no — ignore `#KODIPROP` | yes |
+| iOS / Apple TV | no — FairPlay only | yes |
+
+Best hardware for Kodi: Android TV / Nvidia Shield / Fire TV (usually Widevine
+**L1**, best quality), then Windows or Linux (L3; NLZiet may cap quality).
+Setup steps are in [README.md](README.md#kodi-the-non-browser-player-that-works).
+VLC is still handy: it plays the pairing channel, so you can check the QR card
+without a CDM.
+
 ---
 
 ## 1. Docker, no Tailscale (recommended to start)

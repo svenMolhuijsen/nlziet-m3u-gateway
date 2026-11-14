@@ -300,11 +300,39 @@ Or skip that entirely: pair once with `python -m nlzietd login`, then the wrappe
 only needs the TLS variables (plus `NLZIET_PROFILE` if you want a specific
 profile), and the daemon renews by itself.
 
-## Kodi
+## Kodi: the non-browser player that works
+
+**Kodi with `inputstream.adaptive`** is the realistic answer if you do not want
+a browser. Two reasons, and both matter:
+
+* it has a **Widevine CDM** (L3 on Windows/Linux, often L1 on Android TV /
+  Nvidia Shield), which the protected channels require;
+* `/playlist.m3u` is written in **Kodi's dialect**: the `#KODIPROP` lines name
+  `inputstream.adaptive`, `manifest_type=mpd`,
+  `license_type=com.widevine.alpha` and the licence URL. Generic IPTV players
+  ignore those lines, so they never learn where to fetch the licence and cannot
+  play the channels at all.
+
+Setup:
+
+1. Install Kodi (21 or newer); `inputstream.adaptive` ships with it.
+2. Add-ons → **PVR IPTV Simple Client** → Configure → *M3U Playlist* → set
+   "Location" to *Remote path (URL)* and enter
+   `http://<this-machine>:8099/playlist.m3u` (or the https Tailscale URL).
+3. TV → Channels. On first playback of a protected channel Kodi fetches the
+   Widevine CDM once; that needs an internet connection.
 
 Point Kodi at `http://<this-machine>:8099/playlist.m3u`. The playlist carries
 the `#KODIPROP` lines `inputstream.adaptive` needs (DASH + `com.widevine.alpha`
-+ licence URL). VLC will not play these streams: it has no Widevine CDM.
++ licence URL; `R{SSM}|R` means "POST the raw challenge, take the raw reply").
+VLC, mpv, ffplay, Plex and Jellyfin have no Widevine CDM and will not play these
+streams. VLC *does* play the pairing channel, because that one is plain
+H.264/HLS with no DRM — useful for checking the QR card, not for TV channels.
+
+Where it is most likely to work well: **Android TV / Nvidia Shield / Fire TV**
+with Kodi (usually Widevine L1, best quality), then Windows/Linux Kodi (L3;
+NLZiet may cap quality). Raspberry Pi/LibreELEC works but is L3 and tight on
+CPU. iOS, tvOS and Apple TV are out: FairPlay only, no Widevine.
 
 With no session, that URL is not a channel list but the pairing entry described
 [above](#the-pairing-channel): one channel whose name is the code, whose icon
