@@ -365,6 +365,48 @@ docker compose logs -f
 * The container runs as uid 10001. If you replace the volume with a host bind
   mount, that directory has to be writable by uid 10001.
 
+## Tailscale: the gateway as its own node
+
+`docker-compose.yml` publishes ports on the LAN. If you would rather have the
+gateway be a **node on your tailnet** — reachable from a TV or phone anywhere,
+with a real HTTPS certificate and no port open on the LAN — use
+`compose.tailnet.yml`. It runs `tailscaled` as a sidecar and puts the gateway in
+the *same network namespace*, with no `ports:` at all:
+
+```
+TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d
+docker compose -f compose.tailnet.yml exec tailscale tailscale serve --bg 8099
+```
+
+Before that, enable **MagicDNS** and **HTTPS certificates** in the tailnet's DNS
+settings and create an auth key (Settings → Keys) in the Tailscale admin
+console. An ephemeral, tagged key is fine; the node state lives in the
+`ts-state` volume. The second command prints the URL, for example
+`https://nlziet.<your-tailnet>.ts.net/`.
+
+Serve terminates TLS with a certificate Tailscale provisions and renews for
+the node's MagicDNS name, so browsers get a secure context (EME/Widevine)
+without any `NLZIETD_TLS_CERT`/`KEY` in the daemon. It preserves the original
+`Host` header and sets `x-forwarded-proto: https`, which is exactly what
+nlzietd uses to build the manifest and playlist URLs. The M3U on the tailnet is
+then `https://<node-name>.<your-tailnet>.ts.net/playlist.m3u`.
+
+Notes worth knowing:
+
+* `TS_USERSPACE=true` is the default and needs no `/dev/net/tun` — which Docker
+  Desktop on Windows does not expose. Incoming tailnet connections are
+  forwarded to the same port on localhost; ordinary outbound internet traffic
+  (needed for `api.nlziet.nl`) still uses Docker's normal network.
+* `TS_HOSTNAME` changes the node name (default `nlziet`).
+* `tailscale serve --bg` stores the configuration in the node state, so it
+  comes back after a restart. `tailscale serve reset` removes it.
+* If a first start used a bad/expired key, clear the node state with
+  `docker compose -f compose.tailnet.yml down -v` and start again.
+* Keep `TS_AUTHKEY` out of the repository: `.env` is gitignored and the key is
+  only ever read from the environment.
+* Serve stays **inside** the tailnet. Funnel is a different command and is not
+  used here: this daemon holds your session and must not be public.
+
 ## Layers
 
 ```
