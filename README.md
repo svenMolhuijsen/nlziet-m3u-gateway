@@ -1,8 +1,8 @@
-# nlzietd
+# nlziet-m3u-gateway
 
-A small NLZiet gateway for the machines on your own network. It logs in with
-your own account, finds what is on a channel right now, and serves the pieces a
-player needs to play it:
+`nlzietd` is a small NLZiet gateway for the machines on your own network. It
+logs in with your own account, finds what is on a channel right now, and serves
+the pieces a player needs to play it:
 
 ```
 /                        a Shaka Player page (browser, Widevine via EME - needs https)
@@ -11,7 +11,7 @@ player needs to play it:
 /api/pair                pairing state; POST mints a code
 /pair/qr.png             the live code as a QR image (page, and M3U channel logo)
 /pair/stream.m3u8        the pairing card as an HLS video channel
-/pair/stream/<code>/…   its MPEG-TS segments
+/pair/stream/<code>/ΓÇª   its MPEG-TS segments
 /playlist.m3u            an M3U for Kodi's inputstream.adaptive
 /manifest/<ch>.mpd       the live DASH manifest, rewritten to point at us
 /seg/<ch>/...            media segments, relayed byte for byte
@@ -40,8 +40,8 @@ Then start it (add `NLZIETD_TLS_CERT`/`NLZIETD_TLS_KEY` for the https listener):
 python -m nlzietd
 ```
 
-Credentials in the environment work too — `set NLZIET_EMAIL=…` and
-`set NLZIET_PASSWORD=…` — but that session cannot renew itself; see
+Credentials in the environment work too ΓÇö `set NLZIET_EMAIL=ΓÇª` and
+`set NLZIET_PASSWORD=ΓÇª` ΓÇö but that session cannot renew itself; see
 [sessions](#sessions-pair-once-then-it-renews).
 
 You can also skip the command: start it unpaired and open the page, or point a
@@ -55,7 +55,7 @@ pairing entry still shows the code and its QR as an image. See
 [the pairing channel](#the-pairing-channel).
 
 Then open `https://<this-machine>:8443/` from a machine on the same LAN or
-tailnet — see [browser playback](#browser-playback-needs-https) for why the
+tailnet ΓÇö see [browser playback](#browser-playback-needs-https) for why the
 https URL and not the http one. Kodi uses the plain http port, below.
 
 `NLZIETD_PORT` changes the http port, `NLZIETD_TLS_PORT` the https one,
@@ -63,12 +63,12 @@ https URL and not the http one. Kodi uses the plain http port, below.
 
 | variable | default | meaning |
 | --- | --- | --- |
-| `NLZIET_EMAIL`, `NLZIET_PASSWORD` | – | optional password login, used only when no pairing exists |
+| `NLZIET_EMAIL`, `NLZIET_PASSWORD` | ΓÇô | optional password login, used only when no pairing exists |
 | `NLZIET_PROFILE` | first profile | profile id the streams are attributed to |
 | `NLZIETD_HOST` | `0.0.0.0` | bind address (LAN/tailnet on purpose, do not expose publicly) |
 | `NLZIETD_PORT` | `8099` | listen port (http, for Kodi and for localhost in a browser) |
-| `NLZIETD_TLS_CERT` | – | certificate chain, PEM; enables the https listener |
-| `NLZIETD_TLS_KEY` | – | private key, PEM |
+| `NLZIETD_TLS_CERT` | ΓÇô | certificate chain, PEM; enables the https listener |
+| `NLZIETD_TLS_KEY` | ΓÇô | private key, PEM |
 | `NLZIETD_TLS_PORT` | `8443` | listen port for https |
 | `NLZIETD_STATE` | `nlzietd/state` | token file and catalogue cache |
 | `NLZIETD_FFMPEG` | `ffmpeg` on `PATH` | encoder for the pairing video channel; absent means QR-image fallback |
@@ -81,7 +81,7 @@ where the OS supports it. Do not share the state directory.
 ## Browser playback needs https
 
 This is the one deployment detail that bites everyone, so it is worth its own
-section. A browser only exposes EME — the API behind Widevine — in a *secure
+section. A browser only exposes EME ΓÇö the API behind Widevine ΓÇö in a *secure
 context*: `https://`, or `http://localhost`. On a plain http page served from a
 LAN or tailnet address, Chrome and Edge leave
 `navigator.requestMediaKeySystemAccess` undefined, and Shaka Player fails
@@ -111,7 +111,7 @@ set NLZIETD_TLS_KEY=state\tls\live.key
 
 Those certificates last 90 days; re-run `tailscale cert` (same filenames) and
 restart the daemon. Only the `*.ts.net` name is on the certificate, so use that
-name in the browser — the LAN IP will show a name mismatch.
+name in the browser ΓÇö the LAN IP will show a name mismatch.
 
 **Your own certificate.** Any certificate with `serverAuth` fits, as long as the
 name you browse to is in its SANs and the certificate is trusted by the client.
@@ -153,8 +153,8 @@ There are two ways in, and they differ in one thing that matters:
 
 | how | where the token comes from | renews itself |
 | --- | --- | --- |
-| **pairing** (recommended) | `python -m nlzietd login`, once | yes — refresh token, no password on disk |
-| password | `NLZIET_EMAIL`/`NLZIET_PASSWORD` in the environment | no — the web login returns no refresh token |
+| **pairing** (recommended) | `python -m nlzietd login`, once | yes ΓÇö refresh token, no password on disk |
+| password | `NLZIET_EMAIL`/`NLZIET_PASSWORD` in the environment | no ΓÇö the web login returns no refresh token |
 
 ### Pairing
 
@@ -162,14 +162,14 @@ There are two ways in, and they differ in one thing that matters:
 python -m nlzietd login
 ```
 
-It prints a code and a link like `https://id.nlziet.nl/device?user_code=…`. Open
+It prints a code and a link like `https://id.nlziet.nl/device?user_code=ΓÇª`. Open
 that on a phone or laptop, log in with the NLZiet account, confirm, and the
 command writes the session to the state directory.
 
 Two details that cost time if nobody tells you: the code is typed at
 **`id.nlziet.nl/device`**, not at `nlziet.nl/koppel` (which is only the
 instructions page the TV displays), and the identity server asks for its own
-login — separate from `app.nlziet.nl`, which is why it feels different from
+login ΓÇö separate from `app.nlziet.nl`, which is why it feels different from
 pairing inside the app.
 
 Why this beats a password: the TV's client (`triple-web-tv`) asks for
@@ -177,7 +177,7 @@ Why this beats a password: the TV's client (`triple-web-tv`) asks for
 The access token lives one hour, the daemon renews it silently, and it saves the
 rotated refresh token every time. Nothing expires at eight hours and no password
 sits anywhere on disk. If the pairing is ever revoked (NLZiet's device list, a
-password change), the daemon says so and asks for `login` again — it does not
+password change), the daemon says so and asks for `login` again ΓÇö it does not
 quietly fall back to something else.
 
 ### Pairing from the screen
@@ -186,7 +186,7 @@ The daemon does not have to be paired by the person who started it, and that
 person does not need a shell. With no session:
 
 * **The page** (`/`) asks for a code, prints it large enough to read from a
-  sofa, shows the matching QR, and polls. Scan or type, log in, confirm — the
+  sofa, shows the matching QR, and polls. Scan or type, log in, confirm ΓÇö the
   page picks up the new session and loads the channels by itself. When a code
   expires it mints another, because the human is still standing there.
 * **The playlist** does the same for players that are not browsers. With no
@@ -202,7 +202,7 @@ get right.
 
 ### The pairing channel
 
-A TV in the living room sometimes has nothing but an IPTV player — no browser,
+A TV in the living room sometimes has nothing but an IPTV player ΓÇö no browser,
 no keyboard, no second screen. A logo is a thumbnail in a list, not something
 you can scan, so while unpaired the entry is a real channel you can press play
 on:
@@ -223,10 +223,10 @@ The card is encoded once per code (about five seconds of CPU, ~1.7 MB for a ten
 minute clip) and cached; every player on the network then gets the same bytes.
 ffmpeg is the only thing here that is not in the Python standard library:
 
-* **With ffmpeg** — on `PATH`, or set with `NLZIETD_FFMPEG` — the M3U entry
+* **With ffmpeg** ΓÇö on `PATH`, or set with `NLZIETD_FFMPEG` ΓÇö the M3U entry
   points at `/pair/stream.m3u8`, with `#KODIPROP:...manifest_type=hls` for Kodi.
   No `license_key`: this channel has no DRM.
-* **Without it** — the same entry points at `/pair/qr.png` and the code stays in
+* **Without it** ΓÇö the same entry points at `/pair/qr.png` and the code stays in
   the channel name. Worse to look at, still enough to pair.
 * If an encoder is present but fails, the first request answers `503` and every
   later playlist falls back to the image rather than retrying a broken binary.
@@ -237,7 +237,7 @@ has expired and mints a new one, so a dead code is never left on the screen.
 `HEAD` probes work too, for players that check a channel before reading it.
 
 Anybody who can reach the port can ask for a code. That grants nothing by
-itself — approving it still needs the account password at `id.nlziet.nl` — but
+itself ΓÇö approving it still needs the account password at `id.nlziet.nl` ΓÇö but
 it does mean the pairing screen is as reachable as everything else here. Treat
 the port as trusted; it already serves your streams.
 
@@ -297,7 +297,7 @@ licence; the DASH/Widevine properties above belong to the real channels.
 Keep Kodi on http: it brings its own CDM, so the secure-context rule does not
 apply to it, and its certificate bundle would reject a self-signed certificate.
 The playlist is built from the request, so an http request gets http URLs
-throughout — no mixed content, no certificate to install.
+throughout ΓÇö no mixed content, no certificate to install.
 
 ## Tests
 
@@ -346,7 +346,7 @@ drawing.
   on the same channel share it; different channels each allocate their own,
   and NLZiet's plan limit (1 on Basis) still applies.
 - No authentication on the HTTP server: keep it on the LAN or tailnet. That
-  includes the pairing screen — anyone who can open it can get a code, though
+  includes the pairing screen ΓÇö anyone who can open it can get a code, though
   approving the code still needs the account password.
 - The pairing video needs ffmpeg, which is optional and not bundled. It is a
   ten-minute VOD clip of a still image; after it ends, re-opening the channel
