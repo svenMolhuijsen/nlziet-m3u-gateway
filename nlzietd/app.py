@@ -1,9 +1,10 @@
 """Composition root: the only module that knows every layer at once.
 
 Assembling here, rather than importing adapters inside services, is what makes
-the dependency rule enforceable by reading one file. It is also the seam where
-"password login" becomes "session lifted off the TV": swap the provider, leave
-everything below untouched.
+the dependency rule enforceable by reading one file. It is also the one place
+that decides how this machine authenticates: a device-paired session that
+renews itself. Everything below the `SessionProvider` port is unaware of that
+choice.
 
 `App` exists so callers (the server, the smoke test) get the assembled graph
 as one object instead of a growing tuple, and so no module has to import
@@ -12,19 +13,16 @@ as one object instead of a growing tuple, and so no module has to import
 
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import time
-from dataclasses import dataclass
 
 from .adapters.api import HttpNlzietApi
 from .adapters.catalog import DutCatalogue
-from .adapters.identity import OidcDeviceLogin, OidcPasswordLogin, OidcProfileToken
+from .adapters.identity import OidcDeviceLogin, OidcProfileToken
 from .adapters.relay import HttpRelay
 from .adapters.tokens import FileTokenStore
 from .config import Settings
-from .ports import SessionProvider, TokenStore
 from .services.pairing import EXPIRED, FAILED, PAIRED, PairingService
 from .services.playback import PlaybackService
 from .services.profile import ProfileSessions
@@ -56,30 +54,6 @@ class App:
         self.pairing = pairing
         self.stream = stream
         self.router = router
-
-
-def build_provider(settings: Settings, store: TokenStore) -> SessionProvider:
-    """Choose how we authenticate.
-
-    A paired session wins over credentials in the environment: pairing is the
-    better session (a refresh token, no password anywhere) and it is what the
-    browser's pairing panel writes. Falling back to the password when a refresh
-    token exists would also throw that token away on the next renewal.
-
-    Password login is for machines that were never paired: it can recover from
-    anything, including a revoked session. Both satisfy the same port, so
-    nothing below this function notices which one it got.
-    """
-    paired = store.load()
-    if paired is not None and paired.refresh:
-        return OidcDeviceLogin(settings.id_base)
-    email = os.environ.get("NLZIET_EMAIL")
-    password = os.environ.get("NLZIET_PASSWORD")
-    if email and password:
-        return OidcPasswordLogin(
-            settings.id_base, settings.app_base, email, password
-        )
-    return OidcDeviceLogin(settings.id_base)
 
 
 def pair(settings: Settings) -> int:
@@ -145,7 +119,7 @@ def build(settings: Settings) -> App:
     store = FileTokenStore(settings.token_file)
     session = SessionService(
         store=store,
-        provider=build_provider(settings, store),
+        provider=OidcDeviceLogin(settings.id_base),
         skew=settings.refresh_skew,
     )
     api = HttpNlzietApi(settings.api_base, settings.app_base)

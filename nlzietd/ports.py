@@ -1,9 +1,9 @@
 """Ports: what the services are allowed to depend on.
 
 Services import from this module; services never import from `adapters`.
-That inversion is the whole point of the layout. Concretely: the password
-login and a session lifted off the TV both satisfy `SessionProvider`, so
-swapping one for the other is an `app.py` edit, not a refactor.
+That inversion is the whole point of the layout. Concretely: the daemon only
+knows it holds a `SessionProvider`; whether that is the device-paired session
+or a test double is an `app.py` decision, not a refactor.
 
 These are `Protocol`s rather than ABCs because the adapters should not have
 to inherit anything - a test double is just an object with the right methods.
@@ -30,15 +30,12 @@ class TokenStore(Protocol):
 
 
 class SessionProvider(Protocol):
-    """Mints usable tokens, by refresh or by a fresh login.
+    """Renews a device-paired session.
 
-    `previous` is a hint, not a contract: a provider may ignore it, try to
-    refresh with it, or fall back to a full login.
-
-    Two implementations, and the difference matters: the password login can
-    always mint a new session (it has credentials), while the device-paired one
-    can only renew (it has a refresh token, and a human has to pair again when
-    that dies). The service does not need to know which it holds.
+    `previous` is a hint, not a contract: the provider refreshes with its
+    refresh token if it has one. With no refresh token there is no silent
+    recovery - a human has to pair the machine again, and the provider says
+    so instead of trying something else.
     """
 
     def obtain(self, previous: Tokens | None) -> Tokens: ...

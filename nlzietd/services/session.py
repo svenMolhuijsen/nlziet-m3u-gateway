@@ -53,7 +53,7 @@ class SessionService:
 
             if self._provider is None:
                 raise NotAuthenticated(
-                    "no session on file and no login method configured"
+                    "no session on file and no provider configured to renew one"
                 )
 
             fresh = self._provider.obtain(current)
@@ -73,8 +73,15 @@ class SessionService:
 
     def status(self) -> dict:
         current = self._cached or self._store.load()
+        # With only device pairing there is exactly one way to recover by
+        # ourselves: a refresh token on disk. Without one, a human has to pair
+        # again - so `can_relogin` is a statement about that token, not about
+        # whether a provider object happens to be wired in.
+        can_relogin = self._provider is not None and bool(
+            current and current.refresh
+        )
         if not current:
-            return {"authenticated": False, "can_relogin": self._provider is not None}
+            return {"authenticated": False, "can_relogin": False}
         now = int(self._clock())
         left = current.expires_at - now
         # Never the token itself: this dict is served over HTTP.
@@ -88,8 +95,7 @@ class SessionService:
             # "expired N seconds ago" rather than a rounded zero.
             "expires_in": left,
             "has_refresh": bool(current.refresh),
-            # Whether the daemon can recover on its own. False means the 8-hour
-            # cliff is real: it needs credentials in its environment, and the
-            # next section of the README is the whole story.
-            "can_relogin": self._provider is not None,
+            # Whether the daemon can renew silently. False means a new pairing
+            # is needed; the page will offer one by itself.
+            "can_relogin": can_relogin,
         }

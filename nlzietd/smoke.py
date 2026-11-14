@@ -1,9 +1,9 @@
 """Live smoke test: the real adapters, the real network, one channel.
 
-Deliberately not a unit test - it needs credentials and internet, so it stays
-out of `tests/`. What it proves, in order:
+Deliberately not a unit test - it needs a paired session and internet, so it
+stays out of `tests/`. What it proves, in order:
 
-    1. the login adapter gets tokens at all
+    1. the paired session yields a usable access token
     2. the session service persists them (a second, provider-less session
        reads them back - that is the restart case)
     3. the catalogue maps a channel to a name
@@ -14,8 +14,7 @@ out of `tests/`. What it proves, in order:
 
 Steps 5 and 6 are the ones that matter for the design: they prove the player
 would get manifest, media and licence from *us*, while the CDM does the
-decrypting. Run with NLZIET_EMAIL / NLZIET_PASSWORD in the environment (or a
-token file that is still valid):
+decrypting. Pair once with `python -m nlzietd login` first:
 
     python -m nlzietd.smoke
 """

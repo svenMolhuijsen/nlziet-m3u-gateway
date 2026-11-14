@@ -1,30 +1,22 @@
 """NLZiet's OIDC identity server, driven headlessly.
 
-Why this is hand-rolled instead of "just use a library": the flow needs the
-plain-authorization-code dance with a public client and PKCE, and it is a
-login *form* in the middle of it. A generic OIDC client would still have to
-scrape and POST that form, so the library buys nothing and hides the one
-thing that actually goes wrong (a redirect that carries the auth code).
+There is exactly one way in: the OAuth device grant (RFC 8628) that the TV app
+uses. It returns a refresh token, so the daemon renews itself and no password
+is ever stored. `obtain()` renews an existing session; `begin()`/`complete()`
+are the one-time pairing a human does from a phone or the built-in page.
 
-Why every hop is followed by hand: urllib follows redirects silently, and the
-authorization code lives in the Location header of one of those redirects.
-Auto-following throws it away. `walk()` records each hop instead, so we can
-pick the code out of whichever one carries it.
+The profile-scoped token is a separate grant (`grant_type=profile`): the
+handshake only answers to that one, and it is minted from the user token.
 
-Why the form fields are literal: they are ASP.NET Identity's names
-(ReturnUrl / EmailAddress / Password / __RequestVerificationToken / button).
-If NLZiet redesigns the login page this breaks loudly at the POST, not
-silently somewhere downstream.
+Why this is hand-rolled instead of "just use a library": the calls here are
+plain form POSTs whose statuses mean different things - an
+`authorization_pending` device poll is not a refusal. A generic OIDC client
+would hide exactly the distinction the callers care about.
 """
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import http.cookiejar
 import json
-import os
-import re
 import time
 import urllib.error
 import urllib.parse
@@ -35,7 +27,6 @@ from ..domain.models import DeviceGrant, Tokens
 from ..ports import ProfileTokens
 
 CLIENT_ID = "triple-web"
-SCOPE = "openid api"
 # The TV app's OPENID_SCOPE is "api openid offline_access". The profile grant
 # rejects offline_access (a profile token is not refreshable), and with it the
 # request comes back as a bare invalid_grant - so scope is spelled out here.
@@ -105,201 +96,11 @@ def _post_device(base: str, form: dict, timeout: int = 30) -> dict:
     return _post(base, "/connect/deviceauthorization", form, None, timeout)
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Turn 3xx into a normal response so we can read its Location."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
-
-
-def _visible_text(html: str, limit: int = 400) -> str:
-    """Enough page text to explain a failure to a human, and no more."""
-    body = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", html)
-    body = re.sub(r"(?s)<[^>]+>", " ", body)
-    return re.sub(r"\s+", " ", body).strip()[:limit]
-
-
-class OidcPasswordLogin:
-    """SessionProvider backed by the identity server's login form."""
-
-    def __init__(self, id_base: str, app_base: str, email: str, password: str) -> None:
-        self._id = id_base.rstrip("/")
-        self._app = app_base.rstrip("/")
-        self._email = email
-        self._password = password
-
-    # -- port ---------------------------------------------------------------
-
-    def obtain(self, previous: Tokens | None) -> Tokens:
-        """Refresh if we can, otherwise log in from scratch."""
-        if previous and previous.refresh:
-            try:
-                return self._refresh(previous.refresh)
-            except LoginError:
-                # A dead refresh token is normal (password change, NLZiet
-                # logout, expiry). Falling through to a full login is the
-                # recovery, so this is intentionally not an error path.
-                pass
-        return self._login()
-
-    # -- http plumbing ------------------------------------------------------
-
-    def _opener(self):
-        jar = http.cookiejar.CookieJar()
-        return urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(jar), _NoRedirect()
-        )
-
-    def _fetch(self, op, url, data=None, headers=None):
-        head = {"User-Agent": USER_AGENT, "Accept": "*/*"}
-        body = None
-        if data is not None:
-            body = urllib.parse.urlencode(data).encode()
-            head["Content-Type"] = "application/x-www-form-urlencoded"
-        if headers:
-            head.update(headers)
-        req = urllib.request.Request(
-            url, data=body, headers=head,
-            method="POST" if body is not None else "GET",
-        )
-        try:
-            with op.open(req, timeout=30) as resp:
-                # Header names arrive lowercase from the CDN in front of
-                # id.nlziet.nl; normalising here stops a whole class of bugs.
-                return (resp.status,
-                        {k.lower(): v for k, v in resp.headers.items()},
-                        resp.read().decode("utf-8", "replace"))
-        except urllib.error.HTTPError as err:
-            return (err.code,
-                    {k.lower(): v for k, v in err.headers.items()},
-                    err.read().decode("utf-8", "replace"))
-
-    def _walk(self, op, url, limit=8):
-        """Follow redirects one at a time, remembering every hop."""
-        seen = []
-        status, headers, body = self._fetch(op, url)
-        seen.append((url, status))
-        for _ in range(limit):
-            if status not in (301, 302, 303, 307, 308):
-                break
-            nxt = urllib.parse.urljoin(url, headers.get("location", ""))
-            if not nxt:
-                break
-            url = nxt
-            status, headers, body = self._fetch(op, url)
-            seen.append((url, status))
-        return url, status, headers, body, seen
-
-    # -- the flow -----------------------------------------------------------
-
-    def _authorize_url(self, challenge: str) -> str:
-        state = base64.urlsafe_b64encode(os.urandom(24)).decode().rstrip("=")
-        query = urllib.parse.urlencode({
-            "response_type": "code",
-            "client_id": CLIENT_ID,
-            "scope": SCOPE,
-            "redirect_uri": f"{self._app}/callback",
-            "state": state,
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-            "response_mode": "query",
-        })
-        return f"{self._id}/connect/authorize?{query}"
-
-    def _login(self) -> Tokens:
-        verifier = re.sub(
-            r"[^a-zA-Z0-9]+", "",
-            base64.urlsafe_b64encode(os.urandom(40)).decode(),
-        )
-        challenge = base64.urlsafe_b64encode(
-            hashlib.sha256(verifier.encode()).digest()
-        ).decode().replace("=", "")
-
-        op = self._opener()
-        login_url, status, _, html, seen = self._walk(op, self._authorize_url(challenge))
-        if status != 200:
-            hops = " -> ".join(f"{u[:80]}({s})" for u, s in seen)
-            raise LoginError(f"authorize chain ended at {status}: {hops}")
-
-        token = self._form_token(html)
-        if not token:
-            raise LoginError("login page had no __RequestVerificationToken")
-
-        params = urllib.parse.parse_qs(urllib.parse.urlparse(login_url).query)
-        if "ReturnUrl" not in params:
-            raise LoginError("login URL carried no ReturnUrl; form shape changed")
-
-        status, headers, body = self._fetch(op, login_url, data={
-            "ReturnUrl": params["ReturnUrl"][0],
-            "EmailAddress": self._email,
-            "Password": self._password,
-            "RememberLogin": "true",
-            "button": "login",
-            "__RequestVerificationToken": token,
-        }, headers={
-            "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-            "Origin": self._id,
-            "Referer": login_url,
-        })
-        if status == 200:
-            # ASP.NET re-renders the form on bad credentials. Surface its own
-            # words rather than guessing between "wrong password" and "blocked".
-            raise LoginError(f"credentials rejected: {_visible_text(body)!r}")
-        if status not in (301, 302, 303):
-            raise LoginError(f"credential POST returned {status}")
-
-        loc = urllib.parse.urljoin(self._id, headers.get("location", ""))
-        _, _, _, _, hops = self._walk(op, loc)
-
-        auth_code = None
-        for hop_url, _ in [(loc, 0)] + hops:
-            found = urllib.parse.parse_qs(urllib.parse.urlparse(hop_url).query)
-            if found.get("code"):
-                auth_code = found["code"][0]
-                break
-        if not auth_code:
-            raise LoginError("no authorization code in the redirect chain")
-
-        return self._exchange({
-            "grant_type": "authorization_code",
-            "client_id": CLIENT_ID,
-            "code": auth_code,
-            "redirect_uri": f"{self._app}/callback",
-            "code_verifier": verifier,
-        })
-
-    def _refresh(self, refresh_token: str) -> Tokens:
-        return self._exchange({
-            "grant_type": "refresh_token",
-            "client_id": CLIENT_ID,
-            "refresh_token": refresh_token,
-        })
-
-    def _exchange(self, form: dict) -> Tokens:
-        try:
-            return _tokens_from(_post_token(self._id, form))
-        except ApiError as err:
-            raise LoginError(str(err))
-
-    @staticmethod
-    def _form_token(html: str) -> str | None:
-        # Attribute order is not guaranteed; try both shapes before giving up.
-        for pattern in (
-            r'name="__RequestVerificationToken"[^>]*value="([^"]+)"',
-            r'value="([^"]+)"[^>]*name="__RequestVerificationToken"',
-        ):
-            match = re.search(pattern, html)
-            if match:
-                return match.group(1)
-        return None
-
-
 # -- device pairing ---------------------------------------------------------
 # The TV app authenticates with the OAuth device grant (RFC 8628) and asks for
-# `offline_access`. That is the only place NLZiet hands out a refresh token: the
-# web login returns none, which is exactly why a password-logged-in daemon dies
-# every eight hours. Pairing once with the TV's own client id buys a session
-# that renews itself, and no password has to be stored anywhere.
+# `offline_access`. That is the only place NLZiet hands out a refresh token.
+# Pairing once with the TV's own client id buys a session that renews itself,
+# and no password has to be stored anywhere.
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 TV_CLIENT_ID = "triple-web-tv"
 TV_SCOPE = "api openid offline_access"
@@ -326,10 +127,10 @@ class OidcDeviceLogin:
     what the daemon uses; `begin()`/`complete()` are what `python -m nlzietd
     login` uses, once per machine or whenever the pairing is revoked.
 
-    Why not silently fall back to a password login when the refresh token dies:
-    a provider that quietly does something else than its name says is how a
-    daemon ends up hammering a login endpoint at 3 a.m. The failure is explicit
-    and the fix is one command.
+    Why a dead refresh token is an error rather than a chance to try something
+    else: a provider that quietly does more than its name says is how a daemon
+    ends up hammering a login endpoint at 3 a.m. The failure is explicit and
+    the fix is one command: pair again.
     """
 
     def __init__(
@@ -443,7 +244,7 @@ class OidcProfileToken(ProfileTokens):
 
     Why the retry loop: id.nlziet.nl sits behind Cloudflare and returns a bare
     403 with no body under even modest bursts (five profile tokens in a row is
-    enough). Treating that as "credentials rejected" would log the user out
+    enough). Treating that as a rejected login would log the user out
     for no reason, so transient statuses back off and retry. Time is slept
     here rather than in a service because the knowledge "this endpoint does
     that" belongs to this adapter.

@@ -115,9 +115,8 @@ function describe(detail) {
 
 // A dead session looks like a network failure to Shaka, which is unhelpful.
 // The daemon knows better: /api/status says whether the token on disk is still
-// alive. Ask it, and when it is not, ask for a code instead of pointing at
-// environment variables - the person reading this is holding a remote, not a
-// shell.
+// alive. Ask it, and when it is not, ask for a code instead of pointing at a
+// config file - the person reading this is holding a remote, not a shell.
 let recovering = false;
 
 async function explainFailure(detail) {
