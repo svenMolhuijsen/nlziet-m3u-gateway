@@ -89,6 +89,54 @@ Setup steps are in [README.md](README.md#kodi-the-non-browser-player-that-works)
 VLC is still handy: it plays the pairing channel, so you can check the QR card
 without a CDM.
 
+## Android TV apps in the living room
+
+The TV case has two halves, and they need different things:
+
+| app | pairing channel (plain HLS) | real channels (Widevine DASH) |
+| --- | --- | --- |
+| **Kodi for Android TV** | yes | **yes**, with the default playlist |
+| **OTT Navigator** | yes | **yes**, with `?android=1` + hardware codecs |
+| **Prysm** | yes | yes, with `?android=1` (or a manual licence URL) |
+| TiviMate, IPTV Smarters Pro, Perfect Player, Televizo, XCIPTV, VLC for Android | yes | **no** |
+
+**Kodi for Android TV** is the safest bet: it reads our M3U unchanged. Install
+it (store or APK from kodi.tv), add **PVR IPTV Simple Client**, and paste the
+playlist URL.
+
+**OTT Navigator** is the best native TV UI. It explicitly reads Kodi-compatible
+`#KODIPROP` DRM lines, but wants a plain licence URL rather than Kodi's
+four-field wrapper — so give it:
+
+```
+http://<host>:8099/playlist.m3u?android=1
+```
+
+In its settings, turn on **Use hardware codecs**: software/VLC codecs get no
+licence data. **Prysm** (open source, ExoPlayer-based) is similar; if it does
+not pick up DRM automatically, set the licence URL for a channel to
+`<base>/licence/<channel-id>`.
+
+`?android=1` (alias `?flavor=android`) changes exactly one thing: it drops the
+`||R{SSM}|R` suffix from `license_key`, because Android's MediaDrm already
+POSTs the raw challenge. Kodi keeps using the default URL. Both hit the same
+`/licence/<ch>` proxy.
+
+Two honest limitations:
+
+- **The device matters more than the app.** Widevine must be in the firmware.
+  Certified Android TV / Google TV devices (Nvidia Shield, Chromecast with
+  Google TV, major-brand TVs) usually have **L1**; cheap no-name boxes often
+  have no Widevine at all, and nothing will play. L3 works but NLZiet may cap
+  quality. There is no LG webOS or Samsung Tizen build of these DRM players —
+  use a box or stick.
+- The M3U carries names, logos and groups but **no XMLTV guide**. You get a
+  channel list, not a programme grid.
+
+The apps that cannot do Widevine are still useful: they all play the pairing
+channel, so you can scan the QR and log in from the sofa with whatever is
+already installed on the TV.
+
 ---
 
 ## 1. Docker, no Tailscale (recommended to start)

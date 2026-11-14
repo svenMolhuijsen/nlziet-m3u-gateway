@@ -345,6 +345,14 @@ apply to it, and its certificate bundle would reject a self-signed certificate.
 The playlist is built from the request, so an http request gets http URLs
 throughout — no mixed content, no certificate to install.
 
+On **Android TV** the same Kodi setup applies. Two native apps also read the
+`#KODIPROP` DRM lines — **OTT Navigator** and **Prysm** — but they want a plain
+licence URL, so point them at `.../playlist.m3u?android=1`; that only removes
+Kodi's `||R{SSM}|R` wrapper. TiviMate, IPTV Smarters Pro, Perfect Player and
+VLC for Android have no Widevine path here and will only show the pairing
+channel. See [QUICKSTART.md](QUICKSTART.md#android-tv-apps-in-the-living-room)
+for the full list and the Widevine L1/L3 device caveats.
+
 ## Testing locally
 
 To see the playlist behave the way a TV sees it, open the whole M3U in VLC:
