@@ -1,9 +1,9 @@
 # Quick start
 
 Four ways to run `nlziet-m3u-gateway`. They are independent — pick the one that
-fits the machine you have. Nothing here needs a NLZiet password in a config
-file, nothing decrypts anything, and no option puts the daemon on the public
-internet.
+fits the machine you have. Device pairing is the only way in: scan a QR code
+once, and no NLZiet password is ever stored. Nothing decrypts anything, and no
+option puts the daemon on the public internet.
 
 **New here? Use Docker without Tailscale (section 1). Two commands, one URL.**
 

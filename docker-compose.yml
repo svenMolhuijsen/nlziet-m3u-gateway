@@ -20,8 +20,7 @@ services:
       NLZIETD_STATE: /state
       # NLZIETD_TLS_CERT: /state/tls/live.crt
       # NLZIETD_TLS_KEY: /state/tls/live.key
-      # NLZIET_EMAIL: you@example.com
-      # NLZIET_PASSWORD: ...
+      # NLZIETD_FFMPEG is not needed: ffmpeg is in the image.
     volumes:
       - state:/state
     restart: unless-stopped

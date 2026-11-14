@@ -58,13 +58,10 @@ need it — see [QUICKSTART.md](QUICKSTART.md) for the three ways to get https:
 python -m nlzietd
 ```
 
-Credentials in the environment work too — `set NLZIET_EMAIL=…` and
-`set NLZIET_PASSWORD=…` — but that session cannot renew itself; see
-[sessions](#sessions-pair-once-then-it-renews).
-
 You can also skip the command: start it unpaired and open the page, or point a
 player at the playlist. Both ask the identity server for a code and show it,
-which is the same pairing without a terminal.
+which is the same pairing without a terminal. Pairing is the only way in; there
+is no password to put in an environment variable or a config file.
 
 For the playlist to be a **video** channel rather than just a QR thumbnail,
 install ffmpeg (`winget install Gyan.FFmpeg` on Windows) so it is on `PATH`, or
@@ -81,7 +78,6 @@ https URL and not the http one. Kodi uses the plain http port, below.
 
 | variable | default | meaning |
 | --- | --- | --- |
-| `NLZIET_EMAIL`, `NLZIET_PASSWORD` | – | optional password login, used only when no pairing exists |
 | `NLZIET_PROFILE` | first profile | profile id the streams are attributed to |
 | `NLZIETD_HOST` | `0.0.0.0` | bind address (LAN/tailnet on purpose, do not expose publicly) |
 | `NLZIETD_PORT` | `8099` | listen port (http, for Kodi and for localhost in a browser) |
@@ -167,12 +163,9 @@ is retried once with a fresh handshake.
 
 ## Sessions: pair once, then it renews
 
-There are two ways in, and they differ in one thing that matters:
-
-| how | where the token comes from | renews itself |
-| --- | --- | --- |
-| **pairing** (recommended) | `python -m nlzietd login`, once | yes — refresh token, no password on disk |
-| password | `NLZIET_EMAIL`/`NLZIET_PASSWORD` in the environment | no — the web login returns no refresh token |
+There is exactly one way in, and it is the one the TV app itself uses: an
+OAuth device grant. It returns a **refresh token**, so the daemon renews the
+session silently and no password is ever stored.
 
 ### Pairing
 
@@ -190,10 +183,10 @@ instructions page the TV displays), and the identity server asks for its own
 login — separate from `app.nlziet.nl`, which is why it feels different from
 pairing inside the app.
 
-Why this beats a password: the TV's client (`triple-web-tv`) asks for
+Why the device grant matters: the TV's client (`triple-web-tv`) asks for
 `api openid offline_access`, so the session comes back with a **refresh token**.
 The access token lives one hour, the daemon renews it silently, and it saves the
-rotated refresh token every time. Nothing expires at eight hours and no password
+rotated refresh token every time, so the session has no hard expiry. No password
 sits anywhere on disk. If the pairing is ever revoked (NLZiet's device list, a
 password change), the daemon says so and asks for `login` again — it does not
 quietly fall back to something else.
@@ -259,46 +252,39 @@ itself — approving it still needs the account password at `id.nlziet.nl` — b
 it does mean the pairing screen is as reachable as everything else here. Treat
 the port as trusted; it already serves your streams.
 
-### Password login
+### Session lifetime
 
-`grant_type=password` returns an access token and **no** refresh token, so after
-about 8 hours the session is over. That is NLZiet's design, not a gap here. With
-credentials set, the next request that needs a token logs in again, saves the
-new token `0600`, and carries on; without them those requests answer `503 not
-authenticated`.
+The paired session renews itself, so there is no eight-hour cliff. A few
+details are still worth knowing:
 
-Details worth knowing:
-
-- Logging in is **lazy**, not scheduled: a quiet night costs nothing, and a
-  login happens only when someone actually presses play. One lock spans the
+- Renewal is **lazy**, not scheduled: a quiet night costs nothing, and a
+  refresh happens only when someone actually presses play. One lock spans the
   whole obtain-and-persist sequence, so ten parallel requests after expiry
-  produce one login, not ten (ten would look like an attack to the identity
-  server).
-- A stream that is **already playing** survives the cliff for a while: its
-  segment URLs are signed by the CDN, and the daemon only needs a fresh
-  handshake when the cached ticket passes 30 minutes. So expect playback to
-  stop within half an hour of expiry, not at the same second.
+  produce one refresh, not ten — NLZiet rotates refresh tokens, and the loser
+  would get a dead one.
+- Refresh tokens **rotate**: the daemon writes the new one atomically after
+  each renewal. Kill it in the millisecond between the exchange and the write
+  and you may have to pair again.
+- A stream that is **already playing** survives a revoked session for a while:
+  its segment URLs are signed by the CDN, and the daemon only needs a fresh
+  handshake when the cached ticket passes 30 minutes.
+- If the pairing is revoked or the refresh token dies, the daemon says so and
+  the page offers a new pairing code. There is no password fallback.
 - `/api/status` is the honest read-out: `expires_in` goes negative once the
   token is dead, `has_refresh` says whether silent renewal is possible at all,
-  and `can_relogin` whether the daemon can dig itself out.
+  and `can_relogin` repeats that for a monitor.
 
-Running it unattended on Windows without pairing means putting the credentials
-somewhere the daemon can read at logon. A wrapper next to a Scheduled Task keeps
-them out of the repository and out of shell history:
+Running it unattended: pair once with `python -m nlzietd login`, then a wrapper
+next to a Scheduled Task only needs the TLS variables (plus `NLZIET_PROFILE`
+if you want a specific profile) — no credentials anywhere:
 
 ```bat
 @echo off
-set NLZIET_EMAIL=you@example.com
-set NLZIET_PASSWORD=...
 set NLZIETD_TLS_CERT=C:\nlzietd\state\tls\live.crt
 set NLZIETD_TLS_KEY=C:\nlzietd\state\tls\live.key
 cd /d C:\nlzietd
 python -m nlzietd
 ```
-
-Or skip that entirely: pair once with `python -m nlzietd login`, then the wrapper
-only needs the TLS variables (plus `NLZIET_PROFILE` if you want a specific
-profile), and the daemon renews by itself.
 
 ## Kodi: the non-browser player that works
 
@@ -473,12 +459,12 @@ tools/      local M3U checker (development only; the daemon never imports it)
 app.py      composition root; the only file that knows every layer
 ```
 
-Services never import adapters. The password login and the device-paired session
-are two `SessionProvider`s; which one a given machine uses is an `app.py`
-decision, not a refactor. Pairing lives in a service rather than in a route
-because the code has a lifetime and the wait outlives any request: the CLI and
-the page drive the same state machine, one of them just prints instead of
-drawing.
+Services never import adapters. There is one `SessionProvider` — the
+device-paired session that renews itself — and it is wired in `app.py`; a test
+double satisfies the same port without touching any lower layer. Pairing lives
+in a service rather than in a route because the code has a lifetime and the
+wait outlives any request: the CLI and the page drive the same state machine,
+one of them just prints instead of drawing.
 
 ## Limits, honestly
 
