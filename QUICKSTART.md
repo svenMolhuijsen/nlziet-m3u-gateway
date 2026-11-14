@@ -1,6 +1,6 @@
 # Quick start
 
-Four ways to run `nlziet-m3u-gateway`. They are independent — pick the one that
+Five ways to run `nlziet-m3u-gateway`. They are independent — pick the one that
 fits the machine you have. Device pairing is the only way in: scan a QR code
 once, and no NLZiet password is ever stored. Nothing decrypts anything, and no
 option puts the daemon on the public internet.
@@ -16,6 +16,7 @@ option puts the daemon on the public internet.
 | Reach it from a TV/phone anywhere, privately | **2. Docker + Tailscale** | `https://<node>.<tailnet>.ts.net/playlist.m3u` |
 | No Docker on that machine | **3. Python, no Tailscale** | `http://localhost:8099/playlist.m3u` |
 | Python on a machine already on a tailnet | **4. Python + Tailscale** | `https://<machine>.<tailnet>.ts.net/playlist.m3u` |
+| A Linux box that is always on, no Docker | **5. systemd user service** | `http://<lan-ip>:8099/playlist.m3u` + Tailscale Serve |
 
 ### The one rule that decides everything
 
@@ -38,7 +39,7 @@ optional, not Tailscale-specific, and nothing else in the project reads them.
 
 | how | who terminates TLS | TLS variables? | renewal |
 | --- | --- | --- | --- |
-| **Tailscale Serve** (sections 2 and 4A) | Tailscale, with a certificate for the `*.ts.net` name | **no** | automatic |
+| **Tailscale Serve** (sections 2, 4A and 5) | Tailscale, with a certificate for the `*.ts.net` name | **no** | automatic |
 | your own certificate (section 1) | nlzietd on 8443 | **yes** | up to you |
 | `tailscale cert` + own listener (section 4B) | nlzietd on 8443 | **yes** | re-run every 90 days |
 
@@ -271,6 +272,72 @@ python -m nlzietd
 
 Browsers use `https://<machine>.<tailnet>.ts.net:8443/`; Kodi uses http on
 8099. Those certificates last 90 days — re-run `tailscale cert` and restart.
+
+## 5. Linux systemd user service (always on)
+
+For a Linux box that stays on — no Docker, no image to rebuild. nlzietd is
+standard-library Python, so it runs directly; ffmpeg is optional (only the
+pairing video channel needs it).
+
+```
+# Clone this repository into ~/nlzietd first (use its clone URL), then:
+mkdir -p ~/.config/systemd/user ~/.local/state/nlzietd
+cp ~/nlzietd/deploy/nlzietd.service ~/.config/systemd/user/nlzietd.service
+systemctl --user daemon-reload
+systemctl --user enable --now nlzietd.service
+sudo loginctl enable-linger "$USER"     # start at boot without logging in
+```
+
+`deploy/nlzietd.service` runs `/usr/bin/python3 -m nlzietd` from `~/nlzietd`,
+keeps tokens in `~/.local/state/nlzietd` (outside the clone, so `git pull` is
+safe) and restarts on failure.
+
+Add Tailscale Serve on the host for browsers:
+
+```
+tailscale serve --bg 8099
+```
+
+That gives `https://<this-node>.<tailnet>.ts.net/playlist.m3u` on the tailnet.
+Devices **not** on the tailnet — a living-room TV, for example — use the plain
+LAN address `http://<lan-ip>:8099/playlist.m3u`. The daemon listens on
+`0.0.0.0`, so both work at the same time; just make sure the host firewall
+allows inbound 8099 from the LAN. No Funnel, nothing public.
+
+A fresh install is unpaired: the playlist shows one pairing channel. Scan the
+QR from `https://<this-node>.<tailnet>.ts.net/` — or from an IPTV app on the TV
+— and the channel list appears by itself. Do **not** copy `tokens.json` from
+another running daemon: refresh tokens rotate, so two daemons would kick each
+other out.
+
+Update and watch:
+
+```
+cd ~/nlzietd && git pull && systemctl --user restart nlzietd
+systemctl --user status nlzietd
+journalctl --user -u nlzietd -f
+```
+
+### A stable name: Tailscale Services
+
+Tailscale Serve publishes under the *node's* MagicDNS name, which changes if
+the gateway moves. A **Tailscale Service** (`svc:nlziet`) keeps one name and
+its own virtual IP across hosts. It needs admin-console work and a **tagged**
+host — this is the part that cannot be done from the CLI alone:
+
+1. Admin console → **Services** → define `svc:nlziet` with endpoint `tcp:443`.
+2. Service hosts must be tagged nodes (`service hosts must be tagged nodes`).
+   A desktop authenticated with a user account is not: re-authenticate with a
+   tagged auth key, or run a dedicated container node with one.
+3. On that host: `tailscale serve --service=svc:nlziet --https=443 8099`, then
+   approve the pending host in the console (or set `autoApprovers`).
+4. ACL grant so clients can reach it:
+   `{"src": ["autogroup:member"], "dst": ["svc:nlziet"], "ip": ["443"]}`.
+
+Then every tailnet device uses `https://nlziet.<tailnet>.ts.net/playlist.m3u`.
+A Service VIP is reachable **only from tailnet nodes**, so devices without
+Tailscale keep using the LAN address above — that is the "open a port" side of
+the setup, not Funnel.
 
 ---
 
