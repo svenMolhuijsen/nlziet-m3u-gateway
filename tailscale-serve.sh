@@ -79,5 +79,40 @@ else
   echo "nlziet: Run 'tailscale status' to find the https URL, then open it and pair NLZiet."
 fi
 
+# Watch for the NLZiet account to get paired, then print the final "paste this
+# into your IPTV app" block - the confirmation that it is actually ready. Runs
+# in the background so it never holds up tailscaled. The daemon is reachable on
+# loopback because both containers share this network namespace.
+if [ -n "${dns_name:-}" ]; then
+  (
+    status_url="http://127.0.0.1:${SERVE_PORT}/api/status"
+    playlist="https://${dns_name}/playlist.m3u"
+    # Poll until authenticated true. No hard timeout: the user may pair hours
+    # later, and a quiet watcher costs nothing.
+    while true; do
+      if tailscale status >/dev/null 2>&1; then :; fi
+      body="$(wget -qO- "$status_url" 2>/dev/null || true)"
+      case "$body" in
+        *'"authenticated": true'*|*'"authenticated":true'*)
+          echo ""
+          echo "nlziet: =============================================================="
+          echo "nlziet:  Paired - the gateway is ready. In your IPTV app (Kodi: PVR"
+          echo "nlziet:  IPTV Simple Client -> M3U Playlist -> Remote URL), paste:"
+          echo "nlziet:"
+          echo "nlziet:      ${playlist}"
+          echo "nlziet:"
+          echo "nlziet:  Android apps (OTT Navigator / Prysm): add ?android=1 ->"
+          echo "nlziet:      ${playlist}?android=1"
+          echo "nlziet:  Browser: open https://${dns_name}/  (Widevine needs this https name)."
+          echo "nlziet: =============================================================="
+          echo ""
+          break
+          ;;
+      esac
+      sleep 5
+    done
+  ) &
+fi
+
 # Stay attached to tailscaled; when it exits, the container exits.
 wait "$boot_pid"
