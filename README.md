@@ -452,6 +452,12 @@ Notes worth knowing:
   turns it off.
 * If a first start used a bad/expired key, clear the node state with
   `docker compose -f compose.tailnet.yml down -v` and start again.
+* **Survives a reboot.** Both services use `restart: always`, so they come back
+  on their own after a reboot or a Docker restart — the Tailscale login is saved
+  in the node state, so there is no re-login. The one piece Docker cannot set:
+  Docker Desktop must itself start at login (Docker Desktop → Settings → General
+  → "Start Docker Desktop when you sign in"). On Linux with the system Docker
+  engine this is automatic (`systemctl enable docker`).
 * Keep any `TS_AUTHKEY` out of the repository: `.env` is gitignored and the key
   is only ever read from the environment. The browser login needs no key at all.
 * Serve stays **inside** the tailnet. Funnel is a different command and is not

@@ -58,12 +58,59 @@ tailscale serve --bg "${SERVE_PORT}" || {
   echo "nlziet: 'tailscale serve' failed. The most common cause is HTTPS certificates not being enabled in the tailnet DNS settings." >&2
 }
 
-# Print the URL so success is visible in `docker compose logs`.
+# Print the URL so success is visible in `docker compose logs`, and tell the
+# user the ONE next step: open the page and pair the NLZiet account. Until that
+# happens the gateway serves only the pairing channel, not the TV channels.
 dns_name="$(tailscale status --json 2>/dev/null | grep -o '"DNSName"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\([^"]*\)"$/\1/' | sed 's/\.$//')"
 if [ -n "${dns_name:-}" ]; then
-  echo "nlziet: ready at https://${dns_name}/  (playlist: https://${dns_name}/playlist.m3u)"
+  url="https://${dns_name}/"
+  echo ""
+  echo "nlziet: =============================================================="
+  echo "nlziet:  Tailscale is done. One step left: open this and pair NLZiet:"
+  echo "nlziet:"
+  echo "nlziet:      ${url}"
+  echo "nlziet:"
+  echo "nlziet:  Log in with your NLZiet account and confirm. The channel list"
+  echo "nlziet:  then appears by itself. Playlist: ${url}playlist.m3u"
+  echo "nlziet: =============================================================="
+  echo ""
 else
-  echo "nlziet: Serve enabled. Run 'tailscale status' to find this node's https URL."
+  echo "nlziet: Serve enabled, but could not read this node's name."
+  echo "nlziet: Run 'tailscale status' to find the https URL, then open it and pair NLZiet."
+fi
+
+# Watch for the NLZiet account to get paired, then print the final "paste this
+# into your IPTV app" block - the confirmation that it is actually ready. Runs
+# in the background so it never holds up tailscaled. The daemon is reachable on
+# loopback because both containers share this network namespace.
+if [ -n "${dns_name:-}" ]; then
+  (
+    status_url="http://127.0.0.1:${SERVE_PORT}/api/status"
+    playlist="https://${dns_name}/playlist.m3u"
+    # Poll until authenticated true. No hard timeout: the user may pair hours
+    # later, and a quiet watcher costs nothing.
+    while true; do
+      if tailscale status >/dev/null 2>&1; then :; fi
+      body="$(wget -qO- "$status_url" 2>/dev/null || true)"
+      case "$body" in
+        *'"authenticated": true'*|*'"authenticated":true'*)
+          echo ""
+          echo "nlziet: =============================================================="
+          echo "nlziet:  Paired - the gateway is ready. Put this one link in your"
+          echo "nlziet:  IPTV app (Kodi: PVR IPTV Simple Client -> M3U -> Remote URL):"
+          echo "nlziet:"
+          echo "nlziet:      ${playlist}"
+          echo "nlziet:"
+          echo "nlziet:  It serves the right form for your app automatically (Kodi,"
+          echo "nlziet:  OTT Navigator, Prysm). Or just open https://${dns_name}/ in a browser."
+          echo "nlziet: =============================================================="
+          echo ""
+          break
+          ;;
+      esac
+      sleep 5
+    done
+  ) &
 fi
 
 # Stay attached to tailscaled; when it exits, the container exits.

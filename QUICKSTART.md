@@ -209,6 +209,12 @@ TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d
   `docker compose -f compose.tailnet.yml exec tailscale tailscale serve reset`.
 - Keep any `TS_AUTHKEY` out of the repository — put it in a gitignored `.env` or
   pass it inline. With the browser login you need no key at all.
+- **Survives a reboot.** Both containers use `restart: always`, so they come
+  back by themselves after a reboot or a Docker restart — no key, no re-login
+  (the node state is saved). One thing Docker can't set for you: Docker Desktop
+  itself must start at login. Turn it on once in **Docker Desktop → Settings →
+  General → "Start Docker Desktop when you sign in to your computer"**. After
+  that, power on → it all comes up on its own.
 
 ## 3. Python, no Tailscale
 

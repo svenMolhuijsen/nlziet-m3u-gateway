@@ -175,5 +175,47 @@ class TlsSettingsTests(unittest.TestCase):
         self.assertEqual(settings.tls_port, 9443)
 
 
+class SetupRouteTests(unittest.TestCase):
+    """/setup is a standalone page listing the links and supported apps."""
+
+    class Stub:
+        def channels(self):
+            return {}
+
+        def status(self):
+            return {"ok": True}
+
+    def _router(self):
+        stub = self.Stub()
+        return build_router(
+            catalogue=stub,
+            playback=object(),
+            session=stub,
+            profiles=stub,
+            transport=object(),
+            debug=False,
+        )
+
+    def test_setup_page_is_served(self):
+        reply = self._router().dispatch(
+            Request(
+                method="GET",
+                path="/setup",
+                raw_path="/setup",
+                query={},
+                headers={},
+                body=b"",
+            )
+        )
+        self.assertEqual(reply.status, 200)
+        self.assertIn(b"text/html", reply.headers["content-type"].encode())
+        body = reply.body.decode("utf-8")
+        # The link and a couple of app rows must be present.
+        self.assertIn("/playlist.m3u", body)
+        self.assertIn("Kodi", body)
+        self.assertIn("OTT Navigator", body)
+        self.assertIn("TiviMate", body)
+
+
 if __name__ == "__main__":
     unittest.main()

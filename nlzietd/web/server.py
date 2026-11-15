@@ -42,7 +42,13 @@ from ..services.playback import PlaybackService
 from ..services.profile import ProfileSessions
 from ..services.session import SessionService
 from ..services.transport import TransportService
-from .player import pairing_playlist, player_page, playlist
+from .player import (
+    pairing_playlist,
+    player_page,
+    playlist,
+    setup_page,
+    wants_android_flavor,
+)
 from .qr import png as qr_png
 from .stream import PairingStream, StreamUnavailable
 
@@ -78,6 +84,12 @@ class Request:
     def host(self) -> str:
         """The authority the player used, so we can send it back to itself."""
         return self.headers.get("host") or "localhost"
+
+    @property
+    def user_agent(self) -> str:
+        """The client's User-Agent, lowercased. Used only to pick the licence
+        flavor when the URL does not say; never trusted for anything else."""
+        return self.headers.get("user-agent", "").lower()
 
     @property
     def scheme(self) -> str:
@@ -233,6 +245,14 @@ def build_router(
             player_page().encode("utf-8"),
         )
 
+    def setup(_request, _match):
+        # Standalone "connect your player" page: live links + the app table.
+        return Reply(
+            200,
+            {"content-type": "text/html; charset=utf-8"},
+            setup_page().encode("utf-8"),
+        )
+
     def pair_view(_request, _match):
         if pairing is None:
             return _error(404, "pairing not available")
@@ -285,14 +305,19 @@ def build_router(
                     base, view, stream=bool(stream and stream.available())
                 ).encode("utf-8"),
             )
-        # `?android=1` (or `?flavor=android`) drops Kodi's four-field
-        # `license_key` wrapper: Android TV players read the same #KODIPROP
-        # lines but want a plain licence URL for their MediaDrm challenge.
+        # Which licence-key shape: Kodi's four-field `||R{SSM}|R` wrapper, or
+        # the plain URL Android MediaDrm players (OTT Navigator, Prysm) want.
+        # An explicit `?android=1`/`?android=0` (or `?flavor=android`) always
+        # wins; otherwise we read the User-Agent so the right flavor is served
+        # with no query string at all.
         query = request.query
-        android = (
-            query.get("android", [""])[0] not in ("", "0")
-            or query.get("flavor", [""])[0] == "android"
-        )
+        if "android" in query or "flavor" in query:
+            android = (
+                query.get("android", [""])[0] not in ("", "0")
+                or query.get("flavor", [""])[0] == "android"
+            )
+        else:
+            android = wants_android_flavor(request.user_agent)
         text = playlist(base, catalogue.channels(), android=android)
         return Reply(
             200,
@@ -347,6 +372,7 @@ def build_router(
         )
 
     router.add("GET", r"/", home)
+    router.add("GET", r"/setup", setup)
     router.add("GET", r"/healthz", health)
     router.add("GET", r"/api/status", status)
     router.add("GET", r"/api/channels", channels)

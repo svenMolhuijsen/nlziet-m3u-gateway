@@ -56,7 +56,9 @@ services:
     volumes:
       - ts-state:/var/lib/tailscale
       - ./tailscale-serve.sh:/opt/nlziet/tailscale-serve.sh:ro
-    restart: unless-stopped
+    # always = comes back after a reboot or a Docker daemon restart, not only
+    # a crash. Needs Docker Desktop set to start at login (General settings).
+    restart: always
 
   nlzietd:
     build: .
@@ -73,7 +75,7 @@ services:
       NLZIETD_STATE: /state
     volumes:
       - state:/state
-    restart: unless-stopped
+    restart: always
 
 volumes:
   state:
