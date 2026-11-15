@@ -96,14 +96,13 @@ if [ -n "${dns_name:-}" ]; then
         *'"authenticated": true'*|*'"authenticated":true'*)
           echo ""
           echo "nlziet: =============================================================="
-          echo "nlziet:  Paired - the gateway is ready. In your IPTV app (Kodi: PVR"
-          echo "nlziet:  IPTV Simple Client -> M3U Playlist -> Remote URL), paste:"
+          echo "nlziet:  Paired - the gateway is ready. Put this one link in your"
+          echo "nlziet:  IPTV app (Kodi: PVR IPTV Simple Client -> M3U -> Remote URL):"
           echo "nlziet:"
           echo "nlziet:      ${playlist}"
           echo "nlziet:"
-          echo "nlziet:  Android apps (OTT Navigator / Prysm): add ?android=1 ->"
-          echo "nlziet:      ${playlist}?android=1"
-          echo "nlziet:  Browser: open https://${dns_name}/  (Widevine needs this https name)."
+          echo "nlziet:  It serves the right form for your app automatically (Kodi,"
+          echo "nlziet:  OTT Navigator, Prysm). Or just open https://${dns_name}/ in a browser."
           echo "nlziet: =============================================================="
           echo ""
           break

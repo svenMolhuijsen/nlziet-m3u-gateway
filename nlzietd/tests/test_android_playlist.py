@@ -111,5 +111,67 @@ class RouteTests(unittest.TestCase):
         self.assertIn(b"R{SSM}", reply.body)
 
 
+class DetectTests(unittest.TestCase):
+    """The licence flavor is auto-picked from the User-Agent when the URL does
+    not say, so OTT Navigator / Prysm work without anyone adding ?android=1."""
+
+    def test_detector_matches_android_drm_players(self):
+        from nlzietd.web.player import wants_android_flavor
+
+        for ua in (
+            "OTT Navigator/1.7 (Android)",
+            "ottnavigator",
+            "Prysm/2.0",
+            "ExoPlayerLib/2.19",
+        ):
+            self.assertTrue(wants_android_flavor(ua), ua)
+
+    def test_detector_leaves_kodi_and_others_on_default(self):
+        from nlzietd.web.player import wants_android_flavor
+
+        for ua in (
+            "Kodi/21.0 (Android)",  # Kodi on Android must stay Kodi flavor
+            "Kodi/21.0 (Windows)",
+            "VLC/3.0.20",
+            "Mozilla/5.0 (Macintosh)",
+            "",
+        ):
+            self.assertFalse(wants_android_flavor(ua), ua)
+
+
+class UserAgentRouteTests(RouteTests):
+    """Same router, but drive the flavor from the UA header with no query."""
+
+    def _request_ua(self, user_agent: str) -> Request:
+        return Request(
+            method="GET",
+            path="/playlist.m3u",
+            raw_path="/playlist.m3u",
+            query={},
+            headers={"host": "tv:8099", "user-agent": user_agent},
+            body=b"",
+        )
+
+    def test_ott_navigator_ua_gets_plain_url_without_query(self):
+        reply = self._router().dispatch(self._request_ua("OTT Navigator/1.7"))
+        self.assertNotIn(b"R{SSM}", reply.body)
+
+    def test_kodi_ua_keeps_the_wrapper(self):
+        reply = self._router().dispatch(self._request_ua("Kodi/21.0 (Android)"))
+        self.assertIn(b"R{SSM}", reply.body)
+
+    def test_explicit_query_overrides_the_ua(self):
+        # An Android UA but ?android=0 -> the explicit override wins (Kodi form).
+        req = Request(
+            method="GET",
+            path="/playlist.m3u",
+            raw_path="/playlist.m3u?android=0",
+            query={"android": ["0"]},
+            headers={"host": "tv:8099", "user-agent": "OTT Navigator/1.7"},
+            body=b"",
+        )
+        self.assertIn(b"R{SSM}", self._router().dispatch(req).body)
+
+
 if __name__ == "__main__":
     unittest.main()

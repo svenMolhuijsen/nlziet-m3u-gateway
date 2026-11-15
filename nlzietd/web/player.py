@@ -385,6 +385,29 @@ def player_page() -> str:
     return PLAYER_PAGE
 
 
+# User-Agent substrings of players whose MediaDrm/ExoPlayer stack already POSTs
+# the raw Widevine challenge, so they want the PLAIN licence URL (no Kodi
+# `||R{SSM}|R` wrapper). Kept here beside `playlist` so it is covered by the
+# same tests. Kodi is deliberately absent: it is the default, and it also runs
+# on Android, where its own UA must NOT be read as "Android flavor".
+ANDROID_DRM_AGENTS = (
+    "ott navigator",
+    "ottnavigator",
+    "prysm",
+    "exoplayer",
+)
+
+
+def wants_android_flavor(user_agent: str) -> bool:
+    """True when the client's UA is a known Android DRM player that wants the
+    plain licence URL. Kodi (any platform) returns False and gets the default.
+    """
+    ua = user_agent.lower()
+    if "kodi" in ua:
+        return False
+    return any(token in ua for token in ANDROID_DRM_AGENTS)
+
+
 def pairing_playlist(base: str, view: dict, stream: bool = False) -> str:
     """The playlist an M3U player gets while there is no session.
 
