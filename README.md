@@ -414,15 +414,23 @@ with a real HTTPS certificate and no port open on the LAN — use
 the *same network namespace*, with no `ports:` at all:
 
 ```
-TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d
-docker compose -f compose.tailnet.yml exec tailscale tailscale serve --bg 8099
+docker compose -f compose.tailnet.yml up --build -d
+docker compose -f compose.tailnet.yml logs -f tailscale
 ```
 
-Before that, enable **MagicDNS** and **HTTPS certificates** in the tailnet's DNS
-settings and create an auth key (Settings → Keys) in the Tailscale admin
-console. An ephemeral, tagged key is fine; the node state lives in the
-`ts-state` volume. The second command prints the URL, for example
-`https://nlziet.<your-tailnet>.ts.net/`.
+Before that, enable **HTTPS certificates** in the tailnet's DNS settings — the
+one admin-console step. Enabling it also turns on **MagicDNS** (HTTPS
+certificates require it), so it is a single switch, not two. No auth key to
+create: with no
+`TS_AUTHKEY`, the sidecar prints a one-time browser login link
+(`To authenticate, visit: https://login.tailscale.com/…`). Open it, approve the
+node, and the rest is automatic — the sidecar waits for the node, enables
+Tailscale Serve, and prints the URL, for example
+`nlziet: ready at https://nlziet.<your-tailnet>.ts.net/`. The login is saved in
+the `ts-state` volume, so you click it once.
+
+For a headless box, pass an auth key instead and skip the link:
+`TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d`.
 
 Serve terminates TLS with a certificate Tailscale provisions and renews for
 the node's MagicDNS name, so browsers get a secure context (EME/Widevine)
@@ -438,12 +446,14 @@ Notes worth knowing:
   forwarded to the same port on localhost; ordinary outbound internet traffic
   (needed for `api.nlziet.nl`) still uses Docker's normal network.
 * `TS_HOSTNAME` changes the node name (default `nlziet`).
-* `tailscale serve --bg` stores the configuration in the node state, so it
-  comes back after a restart. `tailscale serve reset` removes it.
+* Serve is enabled automatically on every start and its configuration is stored
+  in the node state, so it comes back after a restart.
+  `docker compose -f compose.tailnet.yml exec tailscale tailscale serve reset`
+  turns it off.
 * If a first start used a bad/expired key, clear the node state with
   `docker compose -f compose.tailnet.yml down -v` and start again.
-* Keep `TS_AUTHKEY` out of the repository: `.env` is gitignored and the key is
-  only ever read from the environment.
+* Keep any `TS_AUTHKEY` out of the repository: `.env` is gitignored and the key
+  is only ever read from the environment. The browser login needs no key at all.
 * Serve stays **inside** the tailnet. Funnel is a different command and is not
   used here: this daemon holds your session and must not be public.
 

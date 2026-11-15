@@ -5,35 +5,57 @@
 # only over Tailscale. That matters because the daemon holds your NLZiet
 # session.
 #
-# Prerequisites in the Tailscale admin console:
-#   - MagicDNS and HTTPS certificates enabled (DNS tab)
-#   - an auth key (Settings -> Keys); an ephemeral, tagged key is fine
+# Prerequisite in the Tailscale admin console:
+#   - HTTPS certificates enabled (DNS tab). This also switches MagicDNS on,
+#     which it depends on - so it is one toggle, not two.
 #
+# Two ways to log in the node, both one command:
+#
+#   # A) interactive browser login - nothing to pre-create, just click a link:
+#   docker compose -f compose.tailnet.yml up --build -d
+#   docker compose -f compose.tailnet.yml logs -f tailscale
+#   # ...open the https://login.tailscale.com/... link the log prints, approve.
+#
+#   # B) auth key (unattended / headless) - mint one in Settings -> Keys:
 #   TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d
-#   docker compose -f compose.tailnet.yml exec tailscale tailscale serve --bg 8099
 #
-# The second command prints the https URL. Serve terminates TLS with a
-# certificate Tailscale provisions and renews for the node's MagicDNS name,
-# so browsers get a secure context (EME/Widevine) without any cert files in
-# the daemon. Serve preserves the original Host header and sets
-# x-forwarded-proto: https, which is what nlzietd uses to build its URLs.
+# Either way the sidecar waits for the node, then enables Tailscale Serve for
+# the gateway on its own. No second `tailscale serve` command to remember.
+# The login is saved in the ts-state volume, so it is a one-time step.
+#
+# Serve terminates TLS with a certificate Tailscale provisions and renews for
+# the node's MagicDNS name, so browsers get a secure context (EME/Widevine)
+# without any cert files in the daemon. Serve preserves the original Host
+# header and sets x-forwarded-proto: https, which is what nlzietd uses to build
+# its URLs.
 services:
   tailscale:
     # Pin the version: a daemon holding a session should not silently upgrade
     # its network stack overnight.
     image: tailscale/tailscale:v1.104.7
     hostname: ${TS_HOSTNAME:-nlziet}
+    # Our wrapper starts tailscaled (via the image's containerboot), waits for
+    # the node, then runs `tailscale serve` automatically. Mounted read-only.
+    entrypoint: ["/bin/sh", "/opt/nlziet/tailscale-serve.sh"]
     environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY to a Tailscale auth key}
+      # Optional. Unset = interactive browser login (the sidecar logs a link to
+      # click). Set it to a Settings -> Keys auth key for unattended startup.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_HOSTNAME: ${TS_HOSTNAME:-nlziet}
       TS_STATE_DIR: /var/lib/tailscale
+      # Only log in if the node is not already authenticated, so the saved
+      # login in ts-state is reused across restarts and you click the link once.
       TS_AUTH_ONCE: "true"
       # Userspace networking needs no /dev/net/tun, which Docker Desktop on
       # Windows does not expose. Inbound tailnet connections are forwarded to
       # the same port on localhost in this shared namespace.
       TS_USERSPACE: "true"
+      # Port the wrapper publishes with Serve; must match the daemon's http
+      # port below. Override both together if you change it.
+      NLZIETD_PORT: ${NLZIETD_PORT:-8099}
     volumes:
       - ts-state:/var/lib/tailscale
+      - ./tailscale-serve.sh:/opt/nlziet/tailscale-serve.sh:ro
     restart: unless-stopped
 
   nlzietd:
@@ -47,6 +69,7 @@ services:
       - tailscale
     environment:
       NLZIETD_HOST: 127.0.0.1
+      NLZIETD_PORT: ${NLZIETD_PORT:-8099}
       NLZIETD_STATE: /state
     volumes:
       - state:/state
