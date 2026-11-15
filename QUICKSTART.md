@@ -172,19 +172,31 @@ nothing listens on the LAN. `tailscaled` runs as a sidecar in userspace mode,
 which works even where `/dev/net/tun` is unavailable (Docker Desktop on
 Windows).
 
-Prerequisites in the Tailscale admin console: enable **MagicDNS** and **HTTPS
-certificates** (DNS tab), then create an auth key (Settings → Keys). An
-ephemeral, tagged key is fine.
+Prerequisite in the Tailscale admin console: enable **HTTPS certificates** (DNS
+tab). That is the one switch — enabling it turns on **MagicDNS** too, since
+HTTPS certificates depend on it, so you do not toggle MagicDNS separately. No
+auth key to mint.
+
+```
+docker compose -f compose.tailnet.yml up --build -d
+docker compose -f compose.tailnet.yml logs -f tailscale
+```
+
+The log prints a login link — `To authenticate, visit: https://login.tailscale.com/…`.
+Open it, approve the node, and the rest happens by itself: the sidecar enables
+Tailscale Serve and prints `nlziet: ready at https://nlziet.<your-tailnet>.ts.net/`.
+You click the link once; the login is saved in the `ts-state` volume.
+
+Serve terminates TLS with a certificate Tailscale provisions and renews, so
+browsers get a secure context and Widevine works — the daemon itself needs no
+certificate files.
+
+**Headless / unattended?** Skip the link by passing an auth key
+(Settings → Keys; an ephemeral, tagged key is fine):
 
 ```
 TS_AUTHKEY=tskey-auth-... docker compose -f compose.tailnet.yml up --build -d
-docker compose -f compose.tailnet.yml exec tailscale tailscale serve --bg 8099
 ```
-
-The second command prints the URL, for example
-`https://nlziet.<your-tailnet>.ts.net/`. Serve terminates TLS with a
-certificate Tailscale provisions and renews, so browsers get a secure context
-and Widevine works — the daemon itself needs no certificate files.
 
 | what | URL |
 | --- | --- |
@@ -192,10 +204,11 @@ and Widevine works — the daemon itself needs no certificate files.
 | M3U on the tailnet | `https://nlziet.<your-tailnet>.ts.net/playlist.m3u` |
 
 - `TS_HOSTNAME=my-tv` changes the node name (default `nlziet`).
-- `tailscale serve --bg` saves the config in the node state, so it survives a
-  restart; `tailscale serve reset` removes it.
-- Keep `TS_AUTHKEY` out of the repository — put it in a gitignored `.env` or
-  pass it inline as above.
+- Serve is enabled automatically on every start and its config is saved in the
+  node state, so it survives a restart. To turn it off:
+  `docker compose -f compose.tailnet.yml exec tailscale tailscale serve reset`.
+- Keep any `TS_AUTHKEY` out of the repository — put it in a gitignored `.env` or
+  pass it inline. With the browser login you need no key at all.
 
 ## 3. Python, no Tailscale
 
@@ -278,7 +291,7 @@ you need for a Widevine channel).
 | pairing entry is an image, not a video | ffmpeg missing — install it or set `NLZIETD_FFMPEG`; the code is still in the channel name |
 | `8099` already in use | `NLZIETD_PORT` (Python) or `NLZIETD_HTTP_PORT` (Docker) |
 | container cannot write tokens | the `/state` bind mount must be writable by uid 10001 |
-| Tailscale node stuck after a bad key | `docker compose -f compose.tailnet.yml down -v` and start again |
+| Tailscale node stuck after a bad key | `docker compose -f compose.tailnet.yml logs tailscale` shows why (expired key, or HTTPS certificates not enabled); fix it, then `down -v` and start again |
 
 Still stuck? `/api/status` reports whether the session, the profile and the
 channel catalogue are alive.
