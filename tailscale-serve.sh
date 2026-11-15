@@ -58,12 +58,25 @@ tailscale serve --bg "${SERVE_PORT}" || {
   echo "nlziet: 'tailscale serve' failed. The most common cause is HTTPS certificates not being enabled in the tailnet DNS settings." >&2
 }
 
-# Print the URL so success is visible in `docker compose logs`.
+# Print the URL so success is visible in `docker compose logs`, and tell the
+# user the ONE next step: open the page and pair the NLZiet account. Until that
+# happens the gateway serves only the pairing channel, not the TV channels.
 dns_name="$(tailscale status --json 2>/dev/null | grep -o '"DNSName"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\([^"]*\)"$/\1/' | sed 's/\.$//')"
 if [ -n "${dns_name:-}" ]; then
-  echo "nlziet: ready at https://${dns_name}/  (playlist: https://${dns_name}/playlist.m3u)"
+  url="https://${dns_name}/"
+  echo ""
+  echo "nlziet: =============================================================="
+  echo "nlziet:  Tailscale is done. One step left: open this and pair NLZiet:"
+  echo "nlziet:"
+  echo "nlziet:      ${url}"
+  echo "nlziet:"
+  echo "nlziet:  Log in with your NLZiet account and confirm. The channel list"
+  echo "nlziet:  then appears by itself. Playlist: ${url}playlist.m3u"
+  echo "nlziet: =============================================================="
+  echo ""
 else
-  echo "nlziet: Serve enabled. Run 'tailscale status' to find this node's https URL."
+  echo "nlziet: Serve enabled, but could not read this node's name."
+  echo "nlziet: Run 'tailscale status' to find the https URL, then open it and pair NLZiet."
 fi
 
 # Stay attached to tailscaled; when it exits, the container exits.
