@@ -42,7 +42,13 @@ from ..services.playback import PlaybackService
 from ..services.profile import ProfileSessions
 from ..services.session import SessionService
 from ..services.transport import TransportService
-from .player import pairing_playlist, player_page, playlist, wants_android_flavor
+from .player import (
+    pairing_playlist,
+    player_page,
+    playlist,
+    setup_page,
+    wants_android_flavor,
+)
 from .qr import png as qr_png
 from .stream import PairingStream, StreamUnavailable
 
@@ -239,6 +245,14 @@ def build_router(
             player_page().encode("utf-8"),
         )
 
+    def setup(_request, _match):
+        # Standalone "connect your player" page: live links + the app table.
+        return Reply(
+            200,
+            {"content-type": "text/html; charset=utf-8"},
+            setup_page().encode("utf-8"),
+        )
+
     def pair_view(_request, _match):
         if pairing is None:
             return _error(404, "pairing not available")
@@ -358,6 +372,7 @@ def build_router(
         )
 
     router.add("GET", r"/", home)
+    router.add("GET", r"/setup", setup)
     router.add("GET", r"/healthz", health)
     router.add("GET", r"/api/status", status)
     router.add("GET", r"/api/channels", channels)

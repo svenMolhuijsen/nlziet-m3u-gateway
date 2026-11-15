@@ -72,6 +72,7 @@ PLAYER_PAGE = """<!doctype html>
   </section>
   <video id="video" controls autoplay muted playsinline></video>
   <p id="status">laden…</p>
+  <p style="margin:.75rem 0 0;font-size:.82rem;color:#6f7885"><a href="/setup" style="color:#8ab4f8">Alle links en ondersteunde apps</a></p>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/shaka-player@4/dist/shaka-player.compiled.js"></script>
 <script>
@@ -383,6 +384,110 @@ boot();
 
 def player_page() -> str:
     return PLAYER_PAGE
+
+
+# A standalone "how to connect" page. Links are built client-side from
+# location.origin, so it is correct on localhost, a LAN IP or a tailnet name
+# without the server templating anything. It states plainly which apps can play
+# the Widevine channels and which cannot, because that is the question every
+# newcomer actually has.
+SETUP_PAGE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nlzietd - connect your player</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #0b0d10; color: #e8eaed; }
+  main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  h1 { font-size: 1.2rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1rem; margin: 1.75rem 0 .5rem; color: #c7cdd6; }
+  p { color: #9aa4b2; margin: .4rem 0; }
+  a { color: #8ab4f8; }
+  .row { display: flex; gap: .5rem; align-items: center; margin: .5rem 0; flex-wrap: wrap; }
+  code, .url { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: #161a20; border: 1px solid #2a3038; border-radius: .4rem; padding: .4rem .55rem; color: #e8eaed; word-break: break-all; }
+  .url { flex: 1 1 22rem; }
+  button { background: #1f2630; color: #e8eaed; border: 1px solid #2f3946; border-radius: .4rem; padding: .45rem .8rem; font: inherit; cursor: pointer; }
+  button:hover { background: #283040; }
+  table { border-collapse: collapse; width: 100%; margin-top: .5rem; font-size: .92rem; }
+  th, td { text-align: left; padding: .45rem .55rem; border-bottom: 1px solid #222832; vertical-align: top; }
+  th { color: #c7cdd6; font-weight: 600; }
+  .yes { color: #8ce99a; }
+  .no { color: #ff8f8f; }
+  .note { font-size: .82rem; color: #6f7885; }
+  .pill { display: inline-block; font-size: .72rem; padding: .1rem .4rem; border-radius: .3rem; border: 1px solid #2f3946; color: #9aa4b2; margin-left: .4rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Connect your player</h1>
+  <p>One link works in every app below. The gateway serves the right form for
+     your player automatically - you do not need to add anything to the URL.
+     <a href="/">Open the browser player instead.</a></p>
+
+  <h2>The M3U link</h2>
+  <div class="row">
+    <span class="url" id="m3u"></span>
+    <button data-copy="m3u">Copy</button>
+  </div>
+  <p class="note">Android apps that want it spelled out can add
+     <code>?android=1</code>; normally you do not have to.</p>
+
+  <h2>Browser</h2>
+  <div class="row">
+    <span class="url" id="home"></span>
+    <button data-copy="home">Copy</button>
+  </div>
+  <p class="note">Open this on the machine itself or over a trusted https name
+     (a Tailscale <code>*.ts.net</code> name). Widevine in a browser needs
+     https or localhost.</p>
+
+  <h2>Which apps can play the channels?</h2>
+  <p>The TV channels are Widevine-protected. An app plays them only if it has a
+     Widevine CDM <em>and</em> reads the DRM lines in the playlist. The pairing
+     screen (the QR card) is plain video, so it shows in anything.</p>
+  <table>
+    <thead><tr><th>App</th><th>TV channels</th><th>Pairing card</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Kodi + inputstream.adaptive</td><td class="yes">yes</td><td class="yes">yes</td><td>any OS; best on Android TV / Shield (Widevine L1)</td></tr>
+      <tr><td>Chrome / Edge (this browser player)</td><td class="yes">yes</td><td class="yes">yes</td><td>needs https or localhost</td></tr>
+      <tr><td>OTT Navigator</td><td class="yes">yes</td><td class="yes">yes</td><td>turn on hardware codecs</td></tr>
+      <tr><td>Prysm</td><td class="yes">yes</td><td class="yes">yes</td><td>ExoPlayer-based</td></tr>
+      <tr><td>VLC, mpv, ffplay</td><td class="no">no</td><td class="yes">yes</td><td>no Widevine CDM</td></tr>
+      <tr><td>TiviMate, IPTV Smarters, Perfect Player, Televizo, XCIPTV</td><td class="no">no</td><td class="yes">yes</td><td>ignore the DRM lines</td></tr>
+      <tr><td>iOS / Apple TV</td><td class="no">no</td><td class="yes">yes</td><td>FairPlay only, no Widevine</td></tr>
+    </tbody>
+  </table>
+  <p class="note">This is a limit of Widevine, not of the gateway: an app with
+     no CDM cannot play protected TV, and nothing here decrypts the stream.</p>
+</main>
+<script>
+  const origin = location.origin;
+  document.getElementById('m3u').textContent = origin + '/playlist.m3u';
+  document.getElementById('home').textContent = origin + '/';
+  for (const btn of document.querySelectorAll('button[data-copy]')) {
+    btn.addEventListener('click', async () => {
+      const text = document.getElementById(btn.dataset.copy).textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        const old = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = old, 1200);
+      } catch (e) {
+        // Clipboard needs a secure context; select the text as a fallback.
+        const r = document.createRange(); r.selectNode(document.getElementById(btn.dataset.copy));
+        getSelection().removeAllRanges(); getSelection().addRange(r);
+      }
+    });
+  }
+</script>
+</body>
+</html>
+"""
+
+
+def setup_page() -> str:
+    return SETUP_PAGE
 
 
 # User-Agent substrings of players whose MediaDrm/ExoPlayer stack already POSTs
