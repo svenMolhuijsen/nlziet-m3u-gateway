@@ -28,6 +28,7 @@ from .services.playback import PlaybackService
 from .services.profile import ProfileSessions
 from .services.session import SessionService
 from .services.transport import TransportService
+from .web.epg import EpgService
 from .web.server import Router, build_router, make_server, server_context
 from .web.stream import PairingStream
 
@@ -45,6 +46,7 @@ class App:
         pairing: PairingService,
         stream: PairingStream,
         router: Router,
+        epg: EpgService | None = None,
     ) -> None:
         self.settings = settings
         self.session = session
@@ -54,6 +56,7 @@ class App:
         self.pairing = pairing
         self.stream = stream
         self.router = router
+        self.epg = epg
 
 
 def pair(settings: Settings) -> int:
@@ -150,6 +153,7 @@ def build(settings: Settings) -> App:
     # (the QR image), just not a video. Resolving the encoder here, once, keeps
     # the web layer from knowing about PATH or a config variable.
     stream = PairingStream(ffmpeg=settings.ffmpeg)
+    epg = EpgService(api=api, catalogue=catalogue, session=session)
     router = build_router(
         catalogue,
         playback,
@@ -160,8 +164,9 @@ def build(settings: Settings) -> App:
         tls_port=settings.tls_port if settings.tls_cert else None,
         pairing=pairing,
         stream=stream,
+        epg=epg,
     )
-    return App(settings, session, profiles, playback, transport, pairing, stream, router)
+    return App(settings, session, profiles, playback, transport, pairing, stream, router, epg)
 
 
 def main(argv: list[str] | None = None) -> int:

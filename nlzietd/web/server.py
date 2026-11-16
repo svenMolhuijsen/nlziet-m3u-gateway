@@ -159,6 +159,7 @@ def build_router(
     tls_port: int | None = None,
     pairing=None,
     stream: PairingStream | None = None,
+    epg=None,
 ) -> Router:
     router = Router()
 
@@ -251,6 +252,29 @@ def build_router(
             200,
             {"content-type": "text/html; charset=utf-8"},
             setup_page().encode("utf-8"),
+        )
+
+    def epg_xml(_request, _match):
+        # The programme guide as XMLTV. A player that read `url-tvg` from the
+        # playlist fetches this; it is cached for hours in the service, so this
+        # handler is a thin pass-through. No session means no guide, but it is
+        # not worth a 503 that a player would surface as an error - an empty
+        # (header-only) XMLTV lets channels still list, just without listings.
+        if epg is None:
+            return _error(404, "epg not available")
+        try:
+            body = epg.xmltv()
+        except (NotAuthenticated, LoginError):
+            body = '<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="nlzietd"></tv>'
+        return Reply(
+            200,
+            {
+                "content-type": "application/xml; charset=utf-8",
+                # A guide is good for hours; let the player cache it too rather
+                # than re-pull a few hundred KB on every channel change.
+                "cache-control": "max-age=3600",
+            },
+            body.encode("utf-8"),
         )
 
     def pair_view(_request, _match):
@@ -373,6 +397,7 @@ def build_router(
 
     router.add("GET", r"/", home)
     router.add("GET", r"/setup", setup)
+    router.add("GET", r"/epg\.xml", epg_xml)
     router.add("GET", r"/healthz", health)
     router.add("GET", r"/api/status", status)
     router.add("GET", r"/api/channels", channels)

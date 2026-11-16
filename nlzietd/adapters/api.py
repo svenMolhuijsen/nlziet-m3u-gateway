@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 
 from ..domain.errors import ApiError
-from ..domain.models import Program
+from ..domain.models import EpgEntry, Program
 from ..ports import NlzietApi
 
 # NLZiet's own web player identifies itself this way; the handshake returns a
@@ -140,6 +140,34 @@ class HttpNlzietApi(NlzietApi):
             start=str(chosen.get("startAt") or ""),
             end=str(chosen.get("endAt") or ""),
         )
+
+    def epg(self, access_token: str, channel_id: str, date: str) -> list[EpgEntry]:
+        # Same endpoint family as live_program, but the day variant: it needs a
+        # `date` (the API rejects the call without it) and returns the whole
+        # day's programmes rather than just what is on air.
+        query = urllib.parse.urlencode({"channel": channel_id, "date": date})
+        data = self._get(f"/v8/epg/programlocations?{query}", access_token)
+        rows = data.get("data") if isinstance(data, dict) else None
+        if not rows:
+            return []  # a channel with no listings for a day is not an error
+        entry = rows[0]
+        chan = str((entry.get("channel") or {}).get("id") or channel_id)
+        out: list[EpgEntry] = []
+        for row in entry.get("programLocations") or []:
+            start = str(row.get("startAt") or "")
+            end = str(row.get("endAt") or "")
+            if not start or not end:
+                continue  # a programme with no window cannot be drawn in a guide
+            out.append(EpgEntry(
+                channel=chan,
+                title=str(row.get("title") or ""),
+                subtitle=str(row.get("subtitle") or ""),
+                description=str(row.get("description") or ""),
+                start=start,
+                end=end,
+                is_movie=bool(row.get("isMovie")),
+            ))
+        return out
 
     def handshake(self, profile_token: str, content_id: str, channel: str) -> dict:
         """Allocate a live stream.
