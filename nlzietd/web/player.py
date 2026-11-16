@@ -555,7 +555,9 @@ def pairing_playlist(base: str, view: dict, stream: bool = False) -> str:
     return "\n".join(lines) + "\n"
 
 
-def playlist(base: str, channels: dict[str, Channel], android: bool = False) -> str:
+def playlist(
+    base: str, channels: dict[str, Channel], android: bool = False
+) -> str:
     """An M3U for Kodi's `inputstream.adaptive` — and for Android apps that
     read the same `#KODIPROP` lines.
 
@@ -566,8 +568,13 @@ def playlist(base: str, channels: dict[str, Channel], android: bool = False) -> 
     read those same `#KODIPROP` lines but want a *plain* licence URL: their
     ExoPlayer/MediaDrm already sends the raw challenge by itself. `android=True`
     emits that simpler form, so `?android=1` on the playlist URL serves them.
+
+    The `#EXTM3U` header carries `url-tvg` pointing at our own `/epg.xml`, so a
+    player that honours it (Kodi's IPTV Simple Client, OTT Navigator) loads the
+    guide with no extra configuration. The programme `tvg-id`s match the
+    channel keys, which is what lets the guide bind to these rows.
     """
-    lines = ["#EXTM3U"]
+    lines = [f'#EXTM3U url-tvg="{base}/epg.xml"']
     for channel in channels.values():
         lines.append(
             f'#EXTINF:-1 tvg-id="{channel.id}" tvg-name="{channel.name}" '

@@ -80,6 +80,32 @@ class Program:
 
 
 @dataclass(frozen=True)
+class EpgEntry:
+    """One programme in the guide, as XMLTV needs it.
+
+    Distinct from `Program` on purpose: `Program` is "what to hand the
+    handshake right now" (content/asset ids matter, times are informational);
+    an `EpgEntry` is "what to draw in a guide" (times are load-bearing and get
+    reformatted, ids do not matter). Keeping them apart means the EPG builder
+    never carries a content id it would never use, and `live_program` never
+    grows guide fields.
+
+    `start`/`end` stay the ISO strings the API returns (with offset, e.g.
+    `2026-11-16T00:51:58+01:00`); the XMLTV layer reformats them. `subtitle`
+    and `description` are often empty - a channel with sparse metadata is
+    normal, not an error.
+    """
+
+    channel: str
+    title: str
+    subtitle: str
+    description: str
+    start: str
+    end: str
+    is_movie: bool = False
+
+
+@dataclass(frozen=True)
 class Ticket:
     """What a player needs to start one stream, and nothing more.
 

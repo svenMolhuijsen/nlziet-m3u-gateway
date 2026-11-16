@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .domain.models import Channel, DeviceGrant, Program, Reply, Tokens
+from .domain.models import Channel, DeviceGrant, EpgEntry, Program, Reply, Tokens
 
 
 class TokenStore(Protocol):
@@ -83,6 +83,16 @@ class NlzietApi(Protocol):
 
     def live_program(self, access_token: str, channel_id: str) -> Program:
         """What is on this channel at this moment."""
+
+    def epg(self, access_token: str, channel_id: str, date: str) -> list[EpgEntry]:
+        """A whole day of programmes for one channel.
+
+        `date` is a plain `YYYY-MM-DD`; the endpoint requires it and returns
+        every programme whose broadcast touches that day. One channel per call
+        - the API ignores a comma-joined list - so the guide is assembled
+        channel by channel, which is a caller (service) concern, not this
+        adapter's.
+        """
 
     def handshake(self, profile_token: str, content_id: str, channel: str) -> dict:
         """Allocate a stream for a live content item; returns the raw payload."""
